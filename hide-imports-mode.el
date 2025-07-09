@@ -32,7 +32,6 @@
 
 (require 'treesit)
 (require 'seq)
-(require 'subr-x)
 
 (defgroup hide-imports nil
   "Hide import statements in code."
