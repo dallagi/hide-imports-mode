@@ -128,8 +128,8 @@
 If WINDOW is nil, the overlay is visible in all windows."
   (let ((overlay (make-overlay start end)))
     (overlay-put overlay 'invisible 'hide-imports)
-    (overlay-put overlay 'before-string 
-                 (propertize hide-imports-replacement-text 
+    (overlay-put overlay 'before-string
+                 (propertize hide-imports-replacement-text
                              'face 'font-lock-comment-face))
     (overlay-put overlay 'hide-imports t)
     (when window
