@@ -23,7 +23,14 @@ clean:
 
 # Check for common issues
 lint:
-	$(EMACS) --batch --eval "(progn (require 'checkdoc) (checkdoc-file \"$(PACKAGE_NAME).el\"))"
+	$(EMACS) --batch 
+		--eval "(require 'package)" 
+		--eval "(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/"))" 
+		--eval "(package-initialize)" 
+		--eval "(unless (package-installed-p 'package-lint) (package-refresh-contents) (package-install 'package-lint))" 
+		--eval "(require 'package-lint)" 
+		--eval "(package-lint-batch-and-exit)" 
+		$(PACKAGE_NAME).el
 
 # Install package locally for testing
 install:
