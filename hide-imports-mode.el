@@ -32,6 +32,8 @@
 ;;; Code:
 
 (require 'treesit)
+(require 'seq)
+(require 'subr-x)
 
 (defgroup hide-imports nil
   "Hide import statements in code."
@@ -52,50 +54,66 @@
 (defvar hide-imports--cursor-in-imports nil
   "Track if cursor is currently in the imports region.")
 
-(defun hide-imports--python-mode-p ()
-  "Check if current buffer is a Python buffer with tree-sitter support."
-  (or (eq major-mode 'python-ts-mode)
-      (and (eq major-mode 'python-mode)
-           (treesit-available-p)
-           (treesit-language-available-p 'python))))
+(defvar hide-imports--language-configs
+  '((python . ((modes . (python-ts-mode python-mode))
+               (language . python)
+               (import-types . ("import_statement" "import_from_statement"))))
+    (rust . ((modes . (rust-ts-mode rust-mode rustic-mode))
+             (language . rust)
+             (import-types . ("use_declaration" "extern_crate_declaration")))))
+  "Configuration for different languages.")
 
-(defun hide-imports--get-python-imports-region ()
-  "Get the region containing Python imports at the top of the file using treesit."
-  (when (and (hide-imports--python-mode-p)
-             (treesit-available-p))
-    (let ((root (treesit-buffer-root-node 'python))
-          (start-pos nil)
-          (end-pos nil)
-          (has-imports nil))
-      (when root
-        (let ((children (treesit-node-children root))
-              (found-non-import nil))
-          (dolist (child children)
-            (let ((node-type (treesit-node-type child)))
-              (cond
-               ((or (string= node-type "import_statement")
-                    (string= node-type "import_from_statement"))
-                (setq has-imports t)
-                (unless start-pos
-                  (setq start-pos (treesit-node-start child)))
-                (setq end-pos (treesit-node-end child)))
-               ((and (string= node-type "comment")
-                     has-imports
-                     (not found-non-import))
-                ;; Only include comments that are interspersed with imports
-                ;; Check if there are more imports after this comment
-                (let ((remaining-children (cdr (memq child children)))
-                      (has-more-imports nil))
-                  (dolist (remaining-child remaining-children)
-                    (when (or (string= (treesit-node-type remaining-child) "import_statement")
-                              (string= (treesit-node-type remaining-child) "import_from_statement"))
-                      (setq has-more-imports t)))
-                  (when has-more-imports
-                    (setq end-pos (treesit-node-end child)))))
-               ((not (string= node-type "comment"))
-                (setq found-non-import t)))))
-          (when (and start-pos end-pos has-imports)
-            (cons start-pos end-pos)))))))
+(defun hide-imports--get-language-config ()
+  "Get the language configuration for the current buffer."
+  (seq-find (lambda (config)
+              (let ((modes (alist-get 'modes (cdr config))))
+                (memq major-mode modes)))
+            hide-imports--language-configs))
+
+(defun hide-imports--supported-mode-p ()
+  "Check if current buffer is supported and has tree-sitter support."
+  (when-let ((config (hide-imports--get-language-config)))
+    (let ((language (alist-get 'language (cdr config))))
+      (and (treesit-available-p)
+           (treesit-language-available-p language)))))
+
+(defun hide-imports--get-imports-region ()
+  "Get the region containing imports at the top of the file using treesit."
+  (when (hide-imports--supported-mode-p)
+    (when-let ((config (hide-imports--get-language-config)))
+      (let ((language (alist-get 'language (cdr config)))
+            (import-types (alist-get 'import-types (cdr config))))
+        (let ((root (treesit-buffer-root-node language))
+              (start-pos nil)
+              (end-pos nil)
+              (has-imports nil))
+          (when root
+            (let ((children (treesit-node-children root))
+                  (found-non-import nil))
+              (dolist (child children)
+                (let ((node-type (treesit-node-type child)))
+                  (cond
+                   ((member node-type import-types)
+                    (setq has-imports t)
+                    (unless start-pos
+                      (setq start-pos (treesit-node-start child)))
+                    (setq end-pos (treesit-node-end child)))
+                   ((and (string= node-type "comment")
+                         has-imports
+                         (not found-non-import))
+                    ;; Only include comments that are interspersed with imports
+                    ;; Check if there are more imports after this comment
+                    (let ((remaining-children (cdr (memq child children)))
+                          (has-more-imports nil))
+                      (dolist (remaining-child remaining-children)
+                        (when (member (treesit-node-type remaining-child) import-types)
+                          (setq has-more-imports t)))
+                      (when has-more-imports
+                        (setq end-pos (treesit-node-end child)))))
+                   ((not (string= node-type "comment"))
+                    (setq found-non-import t)))))
+              (when (and start-pos end-pos has-imports)
+                (cons start-pos end-pos)))))))))
 
 (defun hide-imports--create-overlay (start end)
   "Create an overlay to hide imports from START to END."
@@ -138,8 +156,8 @@
 
 (defun hide-imports--hide-imports ()
   "Hide imports in the current buffer."
-  (when (hide-imports--python-mode-p)
-    (let ((region (hide-imports--get-python-imports-region)))
+  (when (hide-imports--supported-mode-p)
+    (let ((region (hide-imports--get-imports-region)))
       (when region
         (setq hide-imports--imports-region region)
         (unless (hide-imports--cursor-in-imports-p)
