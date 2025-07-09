@@ -45,6 +45,12 @@
   :type 'string
   :group 'hide-imports)
 
+(defcustom global-hide-imports-modes
+  '(python-mode python-ts-mode rust-mode rust-ts-mode rustic-mode)
+  "List of major modes where global-hide-imports-mode should be enabled."
+  :type '(repeat (symbol :tag "Major mode"))
+  :group 'hide-imports)
+
 (defvar hide-imports--overlays nil
   "List of overlays created by hide-imports-mode.")
 
@@ -208,6 +214,20 @@
                                (setq hide-imports--cursor-in-imports nil)
                                (hide-imports--show-imports)
                                (hide-imports--hide-imports)))))))
+
+(defun hide-imports--maybe-turn-on ()
+  "Turn on hide-imports-mode if the current buffer's major mode is supported."
+  (when (and (not hide-imports-mode)
+             (hide-imports--supported-mode-p)
+             (memq major-mode global-hide-imports-modes))
+    (hide-imports-mode 1)))
+
+;;;###autoload
+(define-globalized-minor-mode global-hide-imports-mode
+  hide-imports-mode
+  hide-imports--maybe-turn-on
+  :group 'hide-imports
+  :require 'hide-imports-mode)
 
 (provide 'hide-imports-mode)
 

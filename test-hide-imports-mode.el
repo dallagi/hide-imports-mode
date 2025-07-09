@@ -249,6 +249,119 @@
       (should-not hide-imports--imports-region)
       (should-not hide-imports--cursor-in-imports))))
 
+;;; Global Mode Tests
+
+(ert-deftest hide-imports-global-mode-activation ()
+  "Test global-hide-imports-mode activation and deactivation."
+  (let ((original-global-modes global-hide-imports-modes))
+    (unwind-protect
+        (progn
+          (setq global-hide-imports-modes '(python-mode python-ts-mode))
+          (global-hide-imports-mode 1)
+          (should global-hide-imports-mode)
+          (global-hide-imports-mode -1)
+          (should-not global-hide-imports-mode))
+      (setq global-hide-imports-modes original-global-modes))))
+
+(ert-deftest hide-imports-global-mode-python-auto-enable ()
+  "Test that global mode automatically enables hide-imports-mode in Python buffers."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'python)))
+  (let ((original-global-modes global-hide-imports-modes))
+    (unwind-protect
+        (progn
+          (setq global-hide-imports-modes '(python-mode python-ts-mode))
+          (global-hide-imports-mode 1)
+          (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\nprint('hello')"
+            ;; Manually trigger the function since the test doesn't go through normal buffer creation
+            (hide-imports--maybe-turn-on)
+            (should hide-imports-mode)
+            (should hide-imports--overlays)))
+      (global-hide-imports-mode -1)
+      (setq global-hide-imports-modes original-global-modes))))
+
+(ert-deftest hide-imports-global-mode-rust-auto-enable ()
+  "Test that global mode automatically enables hide-imports-mode in Rust buffers."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'rust)))
+  (let ((original-global-modes global-hide-imports-modes))
+    (unwind-protect
+        (progn
+          (setq global-hide-imports-modes '(rust-ts-mode rust-mode))
+          (global-hide-imports-mode 1)
+          (hide-imports-test-with-rust-buffer "use std::collections::HashMap;\nuse std::fs;\n\nfn main() {\n    println!(\"Hello\");\n}"
+            ;; Manually trigger the function since the test doesn't go through normal buffer creation
+            (hide-imports--maybe-turn-on)
+            (should hide-imports-mode)
+            (should hide-imports--overlays)))
+      (global-hide-imports-mode -1)
+      (setq global-hide-imports-modes original-global-modes))))
+
+(ert-deftest hide-imports-global-mode-unsupported-mode ()
+  "Test that global mode doesn't activate in unsupported modes."
+  (let ((original-global-modes global-hide-imports-modes))
+    (unwind-protect
+        (progn
+          (setq global-hide-imports-modes '(python-mode python-ts-mode))
+          (global-hide-imports-mode 1)
+          (with-temp-buffer
+            (text-mode)
+            (insert "Some text content")
+            (should-not hide-imports-mode)))
+      (global-hide-imports-mode -1)
+      (setq global-hide-imports-modes original-global-modes))))
+
+(ert-deftest hide-imports-global-mode-excluded-mode ()
+  "Test that global mode doesn't activate in modes not in the list."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'python)))
+  (let ((original-global-modes global-hide-imports-modes))
+    (unwind-protect
+        (progn
+          (setq global-hide-imports-modes '(rust-ts-mode))  ; Only Rust modes
+          (global-hide-imports-mode 1)
+          (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\nprint('hello')"
+            (should-not hide-imports-mode)))
+      (global-hide-imports-mode -1)
+      (setq global-hide-imports-modes original-global-modes))))
+
+(ert-deftest hide-imports-global-mode-customization ()
+  "Test customization of global-hide-imports-modes."
+  (let ((original-global-modes global-hide-imports-modes))
+    (unwind-protect
+        (progn
+          (should (listp global-hide-imports-modes))
+          (should (memq 'python-mode global-hide-imports-modes))
+          (should (memq 'rust-ts-mode global-hide-imports-modes))
+          (setq global-hide-imports-modes '(python-mode))
+          (should (equal global-hide-imports-modes '(python-mode))))
+      (setq global-hide-imports-modes original-global-modes))))
+
+(ert-deftest hide-imports-maybe-turn-on-function ()
+  "Test the hide-imports--maybe-turn-on function directly."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'python)))
+  (let ((original-global-modes global-hide-imports-modes))
+    (unwind-protect
+        (progn
+          (setq global-hide-imports-modes '(python-mode python-ts-mode))
+          (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\nprint('hello')"
+            (should-not hide-imports-mode)
+            (hide-imports--maybe-turn-on)
+            (should hide-imports-mode)))
+      (setq global-hide-imports-modes original-global-modes))))
+
+(ert-deftest hide-imports-maybe-turn-on-already-active ()
+  "Test that hide-imports--maybe-turn-on doesn't activate if already active."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'python)))
+  (let ((original-global-modes global-hide-imports-modes))
+    (unwind-protect
+        (progn
+          (setq global-hide-imports-modes '(python-mode python-ts-mode))
+          (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\nprint('hello')"
+            (hide-imports-mode 1)
+            (should hide-imports-mode)
+            ;; Should not change anything since mode is already active
+            (hide-imports--maybe-turn-on)
+            (should hide-imports-mode)))
+      (setq global-hide-imports-modes original-global-modes))))
+
 ;;; Rust Language Tests
 
 (defmacro hide-imports-test-with-rust-buffer (content &rest body)
