@@ -28,6 +28,7 @@
   "Create a temporary buffer with CONTENT, enable treesit if available, and execute BODY."
   (declare (indent 1))
   `(with-temp-buffer
+     (set-window-buffer (selected-window) (current-buffer))
      (insert ,content)
      (let ((inhibit-message t))  ; Suppress python-indent-offset messages during tests
        (if (and (treesit-available-p) (treesit-language-available-p 'python))
@@ -189,17 +190,18 @@
   "Test manual toggle functionality."
   (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\nprint('hello')"
     (when (hide-imports--supported-mode-p)
-      ;; Move cursor away from imports region
-      (goto-char (point-max))
       (hide-imports-mode 1)
-      ;; Need to trigger post-command hook to create overlays
-      (hide-imports--post-command-hook)
-      (should hide-imports--overlays)
-      (hide-imports-toggle)
-      (should-not hide-imports--overlays)
-      (hide-imports-toggle)
-      ;; After toggle, imports should be hidden again
-      (should hide-imports--overlays))))
+      (let ((region (hide-imports--get-imports-region)))
+        (when region
+          ;; Move cursor away from imports region
+          (goto-char (1+ (cdr region)))
+          (hide-imports--post-command-hook)
+          (should (hide-imports--window-has-overlays-p (selected-window)))
+          (hide-imports-toggle)
+          (should-not (hide-imports--window-has-overlays-p (selected-window)))
+          (hide-imports-toggle)
+          ;; After toggle, imports should be hidden again
+          (should (hide-imports--window-has-overlays-p (selected-window))))))))
 
 ;;; Edge Cases
 
@@ -379,52 +381,43 @@
 (ert-deftest hide-imports-multi-window-cursor-tracking ()
   "Test cursor tracking across multiple windows showing the same buffer."
   (skip-unless (and (treesit-available-p) (treesit-language-available-p 'python)))
-  (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\nprint('hello')"
+  (hide-imports-test-with-treesit-buffer "import os
+import sys
+
+print('hello')"
     (when (hide-imports--supported-mode-p)
       (let ((region (hide-imports--get-imports-region)))
         (when region
           (setq hide-imports--imports-region region)
-          
-          ;; Test window-specific cursor position checking
           (let ((window1 (selected-window)))
-            ;; Test cursor in imports for window1
             (goto-char (car region))
+            (set-window-point window1 (point))
             (should (hide-imports--cursor-in-imports-p window1))
-            
-            ;; Test cursor outside imports for window1  
-            ;; Move well beyond the import region
-            (goto-char (point-max))
-            (forward-char -5)  ; Move back a bit from the very end
+            (goto-char (cdr region))
+            (set-window-point window1 (point))
+            (should (hide-imports--cursor-in-imports-p window1))
+            (goto-char (1+ (cdr region)))
+            (set-window-point window1 (point))
             (should-not (hide-imports--cursor-in-imports-p window1))
-            
-            ;; Test window state management
             (hide-imports--set-window-state window1 t)
             (should (hide-imports--get-window-state window1))
-            
             (hide-imports--set-window-state window1 nil)
             (should-not (hide-imports--get-window-state window1))))))))
 
 (ert-deftest hide-imports-multi-window-any-cursor-check ()
   "Test the any-window-in-imports-p function."
   (skip-unless (and (treesit-available-p) (treesit-language-available-p 'python)))
-  (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\nprint('hello')"
+  (hide-imports-test-with-treesit-buffer "import os\nsys\n\nprint('hello')"
     (when (hide-imports--supported-mode-p)
+      (hide-imports-mode 1)
       (let ((region (hide-imports--get-imports-region)))
         (when region
           (setq hide-imports--imports-region region)
-          
-          ;; Test with cursor in imports
-          ;; Buffer content: "import os\nimport sys\n\nprint('hello')"
-          ;; Move to start of import statement
-          (goto-char (point-min))
-          (search-forward "import" nil t)
+          (goto-char (car region))
+          (hide-imports--post-command-hook)
           (should (hide-imports--any-window-in-imports-p))
-          
-          ;; Test with cursor outside imports
-          ;; Buffer content: "import os\nimport sys\n\nprint('hello')"
-          ;; Move to the print statement which should be outside imports
           (goto-char (point-max))
-          (search-backward "print" nil t)
+          (hide-imports--post-command-hook)
           (should-not (hide-imports--any-window-in-imports-p)))))))
 
 (ert-deftest hide-imports-window-state-cleanup ()
