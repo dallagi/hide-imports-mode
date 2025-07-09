@@ -60,6 +60,9 @@
 (defvar hide-imports--cursor-in-imports nil
   "Track if cursor is currently in the imports region.")
 
+(defvar hide-imports--window-states nil
+  "Alist mapping windows to their cursor-in-imports state.")
+
 (defvar hide-imports--language-configs
   '((python . ((modes . (python-ts-mode python-mode))
                (language . python)
@@ -121,56 +124,130 @@
               (when (and start-pos end-pos has-imports)
                 (cons start-pos end-pos)))))))))
 
-(defun hide-imports--create-overlay (start end)
-  "Create an overlay to hide imports from START to END."
+(defun hide-imports--create-overlay (start end &optional window)
+  "Create an overlay to hide imports from START to END, visible only in WINDOW.
+If WINDOW is nil, the overlay is visible in all windows."
   (let ((overlay (make-overlay start end)))
     (overlay-put overlay 'invisible 'hide-imports)
     (overlay-put overlay 'before-string 
                  (propertize hide-imports-replacement-text 
                              'face 'font-lock-comment-face))
     (overlay-put overlay 'hide-imports t)
+    (when window
+      (overlay-put overlay 'window window))
     (push overlay hide-imports--overlays)
     overlay))
 
-(defun hide-imports--remove-overlays ()
-  "Remove all hide-imports overlays."
-  (dolist (overlay hide-imports--overlays)
-    (when (overlay-buffer overlay)
-      (delete-overlay overlay)))
-  (setq hide-imports--overlays nil))
+(defun hide-imports--remove-overlays (&optional window)
+  "Remove hide-imports overlays for WINDOW.
+If WINDOW is nil, remove all overlays."
+  (if window
+      ;; Remove only overlays for specific window
+      (let ((remaining-overlays nil))
+        (dolist (overlay hide-imports--overlays)
+          (if (eq (overlay-get overlay 'window) window)
+              (when (overlay-buffer overlay)
+                (delete-overlay overlay))
+            (push overlay remaining-overlays)))
+        (setq hide-imports--overlays remaining-overlays))
+    ;; Remove all overlays
+    (dolist (overlay hide-imports--overlays)
+      (when (overlay-buffer overlay)
+        (delete-overlay overlay)))
+    (setq hide-imports--overlays nil)))
 
-(defun hide-imports--cursor-in-imports-p ()
-  "Check if cursor is currently in the imports region."
-  (when hide-imports--imports-region
-    (let ((pos (point)))
-      (and (>= pos (car hide-imports--imports-region))
-           (<= pos (cdr hide-imports--imports-region))))))
+(defun hide-imports--get-window-overlays (window)
+  "Get overlays for a specific WINDOW."
+  (seq-filter (lambda (overlay)
+                (eq (overlay-get overlay 'window) window))
+              hide-imports--overlays))
 
-(defun hide-imports--post-command-hook ()
-  "Handle cursor movement for auto-unhide functionality."
-  (when hide-imports-mode
-    (let ((cursor-in-imports (hide-imports--cursor-in-imports-p)))
-      (cond
-       ((and cursor-in-imports (not hide-imports--cursor-in-imports))
-        ;; Cursor entered imports region - show imports
-        (hide-imports--show-imports)
-        (setq hide-imports--cursor-in-imports t))
-       ((and (not cursor-in-imports) hide-imports--cursor-in-imports)
-        ;; Cursor left imports region - hide imports
-        (hide-imports--hide-imports)
-        (setq hide-imports--cursor-in-imports nil))))))
+(defun hide-imports--window-has-overlays-p (window)
+  "Check if WINDOW has any hide-imports overlays."
+  (seq-some (lambda (overlay)
+              (eq (overlay-get overlay 'window) window))
+            hide-imports--overlays))
 
-(defun hide-imports--hide-imports ()
-  "Hide imports in the current buffer."
+(defun hide-imports--create-window-overlay (window)
+  "Create overlay for WINDOW to hide imports."
   (when (hide-imports--supported-mode-p)
     (let ((region (hide-imports--get-imports-region)))
       (when region
         (setq hide-imports--imports-region region)
-        (unless (hide-imports--cursor-in-imports-p)
-          (hide-imports--create-overlay (car region) (cdr region)))))))
+        (hide-imports--create-overlay (car region) (cdr region) window)))))
+
+(defun hide-imports--cursor-in-imports-p (&optional window)
+  "Check if cursor is currently in the imports region for WINDOW.
+If WINDOW is nil, use the selected window."
+  (when hide-imports--imports-region
+    (let ((pos (if window
+                   (window-point window)
+                 (point))))
+      (and (>= pos (car hide-imports--imports-region))
+           (<= pos (cdr hide-imports--imports-region))))))
+
+(defun hide-imports--get-window-state (window)
+  "Get the cursor-in-imports state for WINDOW."
+  (alist-get window hide-imports--window-states))
+
+(defun hide-imports--set-window-state (window state)
+  "Set the cursor-in-imports STATE for WINDOW."
+  (setf (alist-get window hide-imports--window-states) state))
+
+(defun hide-imports--cleanup-window-states ()
+  "Remove entries for non-existent windows from window states."
+  (setq hide-imports--window-states
+        (seq-filter (lambda (entry)
+                      (window-live-p (car entry)))
+                    hide-imports--window-states)))
+
+(defun hide-imports--any-window-in-imports-p ()
+  "Check if any window showing this buffer has cursor in imports region."
+  (let ((current-buffer (current-buffer)))
+    (seq-some (lambda (window)
+                (and (eq (window-buffer window) current-buffer)
+                     (hide-imports--cursor-in-imports-p window)))
+              (window-list))))
+
+(defun hide-imports--post-command-hook ()
+  "Handle cursor movement for auto-unhide functionality."
+  (when hide-imports-mode
+    (let* ((current-window (selected-window))
+           (cursor-in-imports (hide-imports--cursor-in-imports-p))
+           (previous-state (hide-imports--get-window-state current-window))
+           (window-has-overlays (hide-imports--window-has-overlays-p current-window)))
+      
+      ;; Update window state for current window
+      (hide-imports--set-window-state current-window cursor-in-imports)
+      
+      ;; Clean up dead windows
+      (hide-imports--cleanup-window-states)
+      
+      ;; Show/hide imports for the current window only
+      (cond
+       (cursor-in-imports
+        ;; Cursor in imports - show imports in this window (remove overlays)
+        (when window-has-overlays
+          (hide-imports--remove-overlays current-window)))
+       ((not cursor-in-imports)
+        ;; Cursor not in imports - hide imports in this window (add overlays)
+        (unless window-has-overlays
+          (hide-imports--create-window-overlay current-window)))))))
+
+(defun hide-imports--hide-imports ()
+  "Hide imports in the current buffer for all windows."
+  (when (hide-imports--supported-mode-p)
+    (let ((region (hide-imports--get-imports-region)))
+      (when region
+        (setq hide-imports--imports-region region)
+        ;; Create overlays for all windows showing this buffer where cursor is not in imports
+        (dolist (window (window-list))
+          (when (eq (window-buffer window) (current-buffer))
+            (unless (hide-imports--cursor-in-imports-p window)
+              (hide-imports--create-overlay (car region) (cdr region) window))))))))
 
 (defun hide-imports--show-imports ()
-  "Show imports in the current buffer."
+  "Show imports in the current buffer for all windows."
   (hide-imports--remove-overlays))
 
 ;;;###autoload
@@ -193,6 +270,12 @@
       (hide-imports--show-imports)
       (setq hide-imports--imports-region nil)
       (setq hide-imports--cursor-in-imports nil)
+      ;; Clean up window states for this buffer
+      (setq hide-imports--window-states
+            (seq-filter (lambda (entry)
+                          (and (window-live-p (car entry))
+                               (not (eq (window-buffer (car entry)) (current-buffer)))))
+                        hide-imports--window-states))
       (remove-hook 'after-change-functions 'hide-imports--after-change t)
       (remove-hook 'post-command-hook 'hide-imports--post-command-hook t))))
 
