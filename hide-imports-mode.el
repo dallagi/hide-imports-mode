@@ -38,7 +38,7 @@
   :group 'convenience
   :prefix "hide-imports-")
 
-(defcustom hide-imports-replacement-text "Imports..."
+(defcustom hide-imports-replacement-text "Imports"
   "Text to display when imports are hidden."
   :type 'string
   :group 'hide-imports)
