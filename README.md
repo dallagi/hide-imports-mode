@@ -27,7 +27,7 @@ Using `use-package` and `:vc`:
 
 ```emacs-lisp
 (use-package hide-imports-mode
-  :vc (:fetcher github :repo "youruser/hide-imports-mode")
+  :vc (:fetcher github :repo "dallagi/hide-imports-mode")
   :config
   (hide-imports-global-mode 1))
 ```
