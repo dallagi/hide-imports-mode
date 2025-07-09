@@ -23,14 +23,18 @@ clean:
 
 # Check for common issues
 lint:
-	$(EMACS) --batch 
-		--eval "(require 'package)" 
-		--eval "(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/"))" 
-		--eval "(package-initialize)" 
-		--eval "(unless (package-installed-p 'package-lint) (package-refresh-contents) (package-install 'package-lint))" 
-		--eval "(require 'package-lint)" 
-		--eval "(package-lint-batch-and-exit)" 
-		$(PACKAGE_NAME).el
+	$(EMACS) --batch --eval \
+	"(progn \
+	  (require 'package) \
+	  (add-to-list 'package-archives '(\"melpa\" . \"https://melpa.org/packages/\")) \
+	  (package-initialize) \
+	  (unless (package-installed-p 'package-lint) \
+	    (package-refresh-contents) \
+	    (package-install 'package-lint)) \
+	  (require 'package-lint) \
+	  (package-lint-batch-and-exit) \
+	  (kill-emacs))" \
+	$(PACKAGE_NAME).el
 
 # Install package locally for testing
 install:
