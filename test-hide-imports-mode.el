@@ -68,7 +68,7 @@
   "Test Python mode detection."
   (hide-imports-test-with-temp-buffer "import os"
     (should (or (eq major-mode 'python-mode) (eq major-mode 'python-ts-mode)))
-    (when (treesit-available-p)
+    (when (and (treesit-available-p) (treesit-language-available-p 'python))
       (should (hide-imports--supported-mode-p)))))
 
 (ert-deftest hide-imports-import-region-simple ()
