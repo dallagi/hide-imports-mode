@@ -82,7 +82,7 @@
                ((not (string= node-type "comment"))
                 (setq found-non-import t)))))
           (when (and start-pos end-pos)
-            (cons start-pos (1+ end-pos))))))))
+            (cons start-pos end-pos)))))))
 
 (defun hide-imports--create-overlay (start end)
   "Create an overlay to hide imports from START to END."
