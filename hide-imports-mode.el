@@ -46,6 +46,12 @@
 (defvar hide-imports--overlays nil
   "List of overlays created by hide-imports-mode.")
 
+(defvar hide-imports--imports-region nil
+  "Cached region containing imports for auto-unhide functionality.")
+
+(defvar hide-imports--cursor-in-imports nil
+  "Track if cursor is currently in the imports region.")
+
 (defun hide-imports--python-mode-p ()
   "Check if current buffer is a Python buffer with tree-sitter support."
   (or (eq major-mode 'python-ts-mode)
@@ -84,7 +90,7 @@
     (overlay-put overlay 'invisible 'hide-imports)
     (overlay-put overlay 'before-string 
                  (propertize hide-imports-replacement-text 
-                            'face 'font-lock-comment-face))
+                             'face 'font-lock-comment-face))
     (overlay-put overlay 'hide-imports t)
     (push overlay hide-imports--overlays)
     overlay))
@@ -96,12 +102,35 @@
       (delete-overlay overlay)))
   (setq hide-imports--overlays nil))
 
+(defun hide-imports--cursor-in-imports-p ()
+  "Check if cursor is currently in the imports region."
+  (when hide-imports--imports-region
+    (let ((pos (point)))
+      (and (>= pos (car hide-imports--imports-region))
+           (<= pos (cdr hide-imports--imports-region))))))
+
+(defun hide-imports--post-command-hook ()
+  "Handle cursor movement for auto-unhide functionality."
+  (when hide-imports-mode
+    (let ((cursor-in-imports (hide-imports--cursor-in-imports-p)))
+      (cond
+       ((and cursor-in-imports (not hide-imports--cursor-in-imports))
+        ;; Cursor entered imports region - show imports
+        (hide-imports--show-imports)
+        (setq hide-imports--cursor-in-imports t))
+       ((and (not cursor-in-imports) hide-imports--cursor-in-imports)
+        ;; Cursor left imports region - hide imports
+        (hide-imports--hide-imports)
+        (setq hide-imports--cursor-in-imports nil))))))
+
 (defun hide-imports--hide-imports ()
   "Hide imports in the current buffer."
   (when (hide-imports--python-mode-p)
     (let ((region (hide-imports--get-python-imports-region)))
       (when region
-        (hide-imports--create-overlay (car region) (cdr region))))))
+        (setq hide-imports--imports-region region)
+        (unless (hide-imports--cursor-in-imports-p)
+          (hide-imports--create-overlay (car region) (cdr region)))))))
 
 (defun hide-imports--show-imports ()
   "Show imports in the current buffer."
@@ -118,12 +147,17 @@
   (if hide-imports-mode
       (progn
         (add-to-invisibility-spec '(hide-imports . t))
+        (setq hide-imports--cursor-in-imports nil)
         (hide-imports--hide-imports)
-        (add-hook 'after-change-functions 'hide-imports--after-change nil t))
+        (add-hook 'after-change-functions 'hide-imports--after-change nil t)
+        (add-hook 'post-command-hook 'hide-imports--post-command-hook nil t))
     (progn
       (remove-from-invisibility-spec '(hide-imports . t))
       (hide-imports--show-imports)
-      (remove-hook 'after-change-functions 'hide-imports--after-change t))))
+      (setq hide-imports--imports-region nil)
+      (setq hide-imports--cursor-in-imports nil)
+      (remove-hook 'after-change-functions 'hide-imports--after-change t)
+      (remove-hook 'post-command-hook 'hide-imports--post-command-hook t))))
 
 (defun hide-imports-toggle ()
   "Toggle visibility of imports."
@@ -139,6 +173,8 @@
                          (lambda ()
                            (when (buffer-live-p (current-buffer))
                              (with-current-buffer (current-buffer)
+                               (setq hide-imports--imports-region nil)
+                               (setq hide-imports--cursor-in-imports nil)
                                (hide-imports--show-imports)
                                (hide-imports--hide-imports)))))))
 
