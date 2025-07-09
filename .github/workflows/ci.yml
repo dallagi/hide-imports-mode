@@ -11,13 +11,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        emacs-version: ['29.3', '30.0']
+        emacs-version: ['29.3', '30.1']
 
     steps:
     - uses: actions/checkout@v4
 
     - name: Setup Emacs
-      uses: jcs090218/setup-emacs@master
+      uses: purcell/setup-emacs@master
       with:
         version: ${{ matrix.emacs-version }}
 
