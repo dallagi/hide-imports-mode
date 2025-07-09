@@ -80,9 +80,18 @@
                   (setq start-pos (treesit-node-start child)))
                 (setq end-pos (treesit-node-end child)))
                ((and (string= node-type "comment")
-                     (not found-non-import)
-                     has-imports)
-                (setq end-pos (treesit-node-end child)))
+                     has-imports
+                     (not found-non-import))
+                ;; Only include comments that are interspersed with imports
+                ;; Check if there are more imports after this comment
+                (let ((remaining-children (cdr (memq child children)))
+                      (has-more-imports nil))
+                  (dolist (remaining-child remaining-children)
+                    (when (or (string= (treesit-node-type remaining-child) "import_statement")
+                              (string= (treesit-node-type remaining-child) "import_from_statement"))
+                      (setq has-more-imports t)))
+                  (when has-more-imports
+                    (setq end-pos (treesit-node-end child)))))
                ((not (string= node-type "comment"))
                 (setq found-non-import t)))))
           (when (and start-pos end-pos has-imports)
