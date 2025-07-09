@@ -65,7 +65,8 @@
              (treesit-available-p))
     (let ((root (treesit-buffer-root-node 'python))
           (start-pos nil)
-          (end-pos nil))
+          (end-pos nil)
+          (has-imports nil))
       (when root
         (let ((children (treesit-node-children root))
               (found-non-import nil))
@@ -73,15 +74,18 @@
             (let ((node-type (treesit-node-type child)))
               (cond
                ((or (string= node-type "import_statement")
-                    (string= node-type "import_from_statement")
-                    (and (string= node-type "comment")
-                         (not found-non-import)))
+                    (string= node-type "import_from_statement"))
+                (setq has-imports t)
                 (unless start-pos
                   (setq start-pos (treesit-node-start child)))
                 (setq end-pos (treesit-node-end child)))
+               ((and (string= node-type "comment")
+                     (not found-non-import)
+                     has-imports)
+                (setq end-pos (treesit-node-end child)))
                ((not (string= node-type "comment"))
                 (setq found-non-import t)))))
-          (when (and start-pos end-pos)
+          (when (and start-pos end-pos has-imports)
             (cons start-pos end-pos)))))))
 
 (defun hide-imports--create-overlay (start end)
