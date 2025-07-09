@@ -32,6 +32,10 @@ Using `use-package` and `:vc`:
   (hide-imports-global-mode 1))
 ```
 
+## Demo
+
+![hide-imports-mode demo](demo.svg)
+
 ## Usage
 
 ### Enabling the Mode
