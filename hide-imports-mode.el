@@ -26,8 +26,7 @@
 ;;; Commentary:
 
 ;; Hide-imports-mode is a minor mode that allows you to hide import
-;; statements in your code to reduce visual clutter and focus on the
-;; actual implementation.
+;; statements in your code to reduce visual clutter.
 
 ;;; Code:
 
@@ -214,15 +213,14 @@ If WINDOW is nil, use the selected window."
   (when hide-imports-mode
     (let* ((current-window (selected-window))
            (cursor-in-imports (hide-imports--cursor-in-imports-p))
-           (previous-state (hide-imports--get-window-state current-window))
            (window-has-overlays (hide-imports--window-has-overlays-p current-window)))
-      
+
       ;; Update window state for current window
       (hide-imports--set-window-state current-window cursor-in-imports)
-      
+
       ;; Clean up dead windows
       (hide-imports--cleanup-window-states)
-      
+
       ;; Show/hide imports for the current window only
       (cond
        (cursor-in-imports
@@ -286,8 +284,8 @@ If WINDOW is nil, use the selected window."
       (hide-imports--show-imports)
     (hide-imports--hide-imports)))
 
-(defun hide-imports--after-change (beg end len)
-  "Re-hide imports after buffer changes."
+(defun hide-imports--after-change (_beg _end _len)
+  "Re-hide imports after buffer change."
   (when hide-imports-mode
     (run-with-idle-timer 0.1 nil
                          (lambda ()
