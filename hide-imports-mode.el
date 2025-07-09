@@ -45,9 +45,9 @@
   :type 'string
   :group 'hide-imports)
 
-(defcustom global-hide-imports-modes
+(defcustom hide-imports-global-modes
   '(python-mode python-ts-mode rust-mode rust-ts-mode rustic-mode)
-  "List of major modes where global-hide-imports-mode should be enabled."
+  "List of major modes where hide-imports-global-mode should be enabled."
   :type '(repeat (symbol :tag "Major mode"))
   :group 'hide-imports)
 
@@ -302,11 +302,11 @@ If WINDOW is nil, use the selected window."
   "Turn on hide-imports-mode if the current buffer's major mode is supported."
   (when (and (not hide-imports-mode)
              (hide-imports--supported-mode-p)
-             (memq major-mode global-hide-imports-modes))
+             (memq major-mode hide-imports-global-modes))
     (hide-imports-mode 1)))
 
 ;;;###autoload
-(define-globalized-minor-mode global-hide-imports-mode
+(define-globalized-minor-mode hide-imports-global-mode
   hide-imports-mode
   hide-imports--maybe-turn-on
   :group 'hide-imports
