@@ -37,7 +37,7 @@ Using `use-package` and `:vc`:
 
 ## Demo
 
-![hide-imports-mode demo](demo.svg)
+![hide-imports-mode demo](demo.gif)
 
 ## Usage
 
