@@ -71,6 +71,14 @@ Using `use-package` and `:vc`:
     ;; Hide all imports, even single lines
     (setq hide-imports-minimum-rows 1)
     ```
+-   `hide-imports-hide-all-blocks`: When non-nil, hide all contiguous import blocks instead of only the first one (default: nil). Each contiguous block of imports/comments must meet the minimum-rows threshold to be hidden.
+    ```emacs-lisp
+    ;; Hide all import blocks throughout the file
+    (setq hide-imports-hide-all-blocks t)
+
+    ;; Hide only the first import block (default behavior)
+    (setq hide-imports-hide-all-blocks nil)
+    ```
 -   `hide-imports-global-modes`: A list of major modes where `hide-imports-global-mode` should activate `hide-imports-mode`.
     ```emacs-lisp
     (setq hide-imports-global-modes '(python-mode python-ts-mode rust-mode))

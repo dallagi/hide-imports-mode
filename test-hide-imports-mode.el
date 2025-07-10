@@ -165,7 +165,7 @@
     (when (hide-imports--supported-mode-p)
       (let ((region (hide-imports--get-imports-region)))
         (when region
-          (setq hide-imports--imports-region region)
+          (setq hide-imports--imports-regions (list region))
           (goto-char (car region))
           (should (hide-imports--cursor-in-imports-p))
           (goto-char (cdr region))
@@ -180,7 +180,7 @@
       (hide-imports-mode 1)
       (let ((region (hide-imports--get-imports-region)))
         (when region
-          (setq hide-imports--imports-region region)
+          (setq hide-imports--imports-regions (list region))
           
           ;; Move cursor to imports region
           (goto-char (car region))
@@ -264,10 +264,10 @@
         ;; Need to trigger post-command hook to create overlays
         (hide-imports--post-command-hook)
         (should hide-imports--overlays)
-        (should hide-imports--imports-region)
+        (should hide-imports--imports-regions)
         (hide-imports-mode -1)
         (should-not hide-imports--overlays)
-        (should-not hide-imports--imports-region)
+        (should-not hide-imports--imports-regions)
         (should-not hide-imports--cursor-in-imports)))))
 
 ;;; Global Mode Tests
@@ -405,7 +405,7 @@ print('hello')"
     (when (hide-imports--supported-mode-p)
       (let ((region (hide-imports--get-imports-region)))
         (when region
-          (setq hide-imports--imports-region region)
+          (setq hide-imports--imports-regions (list region))
           (let ((window1 (selected-window)))
             (goto-char (car region))
             (set-window-point window1 (point))
@@ -429,7 +429,7 @@ print('hello')"
       (hide-imports-mode 1)
       (let ((region (hide-imports--get-imports-region)))
         (when region
-          (setq hide-imports--imports-region region)
+          (setq hide-imports--imports-regions (list region))
           (goto-char (car region))
           (hide-imports--post-command-hook)
           (should (hide-imports--any-window-in-imports-p))
@@ -444,7 +444,7 @@ print('hello')"
     (when (hide-imports--supported-mode-p)
       (let ((region (hide-imports--get-imports-region)))
         (when region
-          (setq hide-imports--imports-region region)
+          (setq hide-imports--imports-regions (list region))
           
           ;; Create a fake window entry
           (let ((fake-window (make-symbol "fake-window")))
@@ -462,7 +462,7 @@ print('hello')"
     (when (hide-imports--supported-mode-p)
       (let ((region (hide-imports--get-imports-region)))
         (when region
-          (setq hide-imports--imports-region region)
+          (setq hide-imports--imports-regions (list region))
           (hide-imports-mode 1)
           
           ;; Start with cursor outside imports (should hide)
@@ -815,6 +815,191 @@ print('hello')"
       (should (eq (car config) 'elixir))
       (should (equal (alist-get 'language (cdr config)) 'elixir))
       (should (equal (alist-get 'import-types (cdr config)) '("call"))))))
+
+;;; Multi-block Tests
+
+(ert-deftest hide-imports-hide-all-blocks-python ()
+  "Test hiding all import blocks in Python when hide-imports-hide-all-blocks is enabled."
+  (hide-imports-test-with-min-rows 1
+    (let ((hide-imports-hide-all-blocks t))
+      (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\ndef func1():\n    pass\n\nimport json\nimport re\n\ndef func2():\n    pass"
+        (when (hide-imports--supported-mode-p)
+          (let ((regions (hide-imports--get-imports-regions)))
+            (should regions)
+            (should (= (length regions) 2))
+            ;; First block: import os, import sys
+            (let ((first-block-text (buffer-substring (caar regions) (cdar regions))))
+              (should (string-match-p "import os" first-block-text))
+              (should (string-match-p "import sys" first-block-text)))
+            ;; Second block: import json, import re
+            (let ((second-block-text (buffer-substring (car (nth 1 regions)) (cdr (nth 1 regions)))))
+              (should (string-match-p "import json" second-block-text))
+              (should (string-match-p "import re" second-block-text)))))))))
+
+(ert-deftest hide-imports-hide-all-blocks-disabled ()
+  "Test that only first block is hidden when hide-imports-hide-all-blocks is disabled."
+  (hide-imports-test-with-min-rows 1
+    (let ((hide-imports-hide-all-blocks nil))
+      (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\ndef func1():\n    pass\n\nimport json\nimport re\n\ndef func2():\n    pass"
+        (when (hide-imports--supported-mode-p)
+          (let ((regions (hide-imports--get-imports-regions)))
+            (should regions)
+            (should (= (length regions) 1))
+            ;; Should only get first block
+            (let ((first-block-text (buffer-substring (caar regions) (cdar regions))))
+              (should (string-match-p "import os" first-block-text))
+              (should (string-match-p "import sys" first-block-text))
+              (should-not (string-match-p "import json" first-block-text)))))))))
+
+(ert-deftest hide-imports-hide-all-blocks-minimum-rows ()
+  "Test that multi-block mode respects minimum rows setting."
+  (hide-imports-test-with-min-rows 3
+    (let ((hide-imports-hide-all-blocks t))
+      (hide-imports-test-with-treesit-buffer "import os\n\ndef func1():\n    pass\n\nimport json\nimport re\nimport math\n\ndef func2():\n    pass"
+        (when (hide-imports--supported-mode-p)
+          (let ((regions (hide-imports--get-imports-regions)))
+            ;; First block has only 1 row, second block has 3 rows
+            ;; Only second block should be returned
+            (should regions)
+            (should (= (length regions) 1))
+            (let ((block-text (buffer-substring (caar regions) (cdar regions))))
+              (should-not (string-match-p "import os" block-text))
+              (should (string-match-p "import json" block-text))
+              (should (string-match-p "import re" block-text))
+              (should (string-match-p "import math" block-text)))))))))
+
+(ert-deftest hide-imports-hide-all-blocks-elixir ()
+  "Test hiding all import blocks in Elixir when hide-imports-hide-all-blocks is enabled."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
+  (hide-imports-test-with-min-rows 1
+    (let ((hide-imports-hide-all-blocks t))
+      (hide-imports-test-with-elixir-buffer "defmodule MyModule do\n  import Foo\n  import Bar\n\n  def some_function do\n    :ok\n  end\n\n  import Baz\n  import Qux\n\n  def another_function do\n    :ok\n  end\nend"
+        (let ((regions (hide-imports--get-imports-regions)))
+          (should regions)
+          (should (= (length regions) 2))
+          ;; First block: import Foo, import Bar
+          (let ((first-block-text (buffer-substring (caar regions) (cdar regions))))
+            (should (string-match-p "import Foo" first-block-text))
+            (should (string-match-p "import Bar" first-block-text)))
+          ;; Second block: import Baz, import Qux  
+          (let ((second-block-text (buffer-substring (car (nth 1 regions)) (cdr (nth 1 regions)))))
+            (should (string-match-p "import Baz" second-block-text))
+            (should (string-match-p "import Qux" second-block-text))))))))
+
+(ert-deftest hide-imports-elixir-multiple-import-blocks-updated ()
+  "Test that Elixir gets all blocks when hide-all-blocks is enabled, only first when disabled."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
+  (hide-imports-test-with-min-rows 1
+    ;; Test with hide-all-blocks disabled (should only get first block)
+    (let ((hide-imports-hide-all-blocks nil))
+      (hide-imports-test-with-elixir-buffer "defmodule MyModule do\n  import Foo\n  import Bar\n\n  def some_function do\n    :ok\n  end\n\n  import Baz\n  import Qux\nend"
+        (let ((regions (hide-imports--get-imports-regions)))
+          (should regions)
+          (should (= (length regions) 1))
+          ;; Check that the region doesn't include the later imports (Baz/Qux)
+          (let ((region-text (buffer-substring (caar regions) (cdar regions))))
+            (should (string-match-p "import Foo" region-text))
+            (should (string-match-p "import Bar" region-text))
+            (should-not (string-match-p "import Baz" region-text))
+            (should-not (string-match-p "import Qux" region-text))))))
+    ;; Test with hide-all-blocks enabled (should get both blocks)
+    (let ((hide-imports-hide-all-blocks t))
+      (hide-imports-test-with-elixir-buffer "defmodule MyModule do\n  import Foo\n  import Bar\n\n  def some_function do\n    :ok\n  end\n\n  import Baz\n  import Qux\nend"
+        (let ((regions (hide-imports--get-imports-regions)))
+          (should regions)
+          (should (= (length regions) 2)))))))
+
+;;; Nested Scope Tests
+
+(ert-deftest hide-imports-python-nested-in-function ()
+  "Test Python imports nested within a function."
+  (hide-imports-test-with-min-rows 1
+    (hide-imports-test-with-treesit-buffer "def my_function():\n    import os\n    import sys\n    # Some code\n    return 'hello'"
+      (when (hide-imports--supported-mode-p)
+        (let ((regions (hide-imports--get-imports-regions)))
+          (should regions)
+          (should (= (length regions) 1))
+          (let ((region-text (buffer-substring (caar regions) (cdar regions))))
+            (should (string-match-p "import os" region-text))
+            (should (string-match-p "import sys" region-text))
+            (should-not (string-match-p "def my_function" region-text))
+            (should-not (string-match-p "return" region-text))))))))
+
+(ert-deftest hide-imports-python-nested-in-class ()
+  "Test Python imports nested within a class."
+  (hide-imports-test-with-min-rows 1
+    (hide-imports-test-with-treesit-buffer "class MyClass:\n    def method(self):\n        import json\n        import re\n        return json.dumps({})"
+      (when (hide-imports--supported-mode-p)
+        (let ((regions (hide-imports--get-imports-regions)))
+          (should regions)
+          (should (= (length regions) 1))
+          (let ((region-text (buffer-substring (caar regions) (cdar regions))))
+            (should (string-match-p "import json" region-text))
+            (should (string-match-p "import re" region-text))
+            (should-not (string-match-p "class MyClass" region-text))
+            (should-not (string-match-p "def method" region-text))))))))
+
+(ert-deftest hide-imports-python-mixed-nested-and-toplevel ()
+  "Test Python with both top-level and nested imports."
+  (hide-imports-test-with-min-rows 1
+    (let ((hide-imports-hide-all-blocks t))
+      (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\ndef func():\n    import json\n    import re\n    return 'test'\n\nprint('hello')"
+        (when (hide-imports--supported-mode-p)
+          (let ((regions (hide-imports--get-imports-regions)))
+            (should regions)
+            (should (= (length regions) 2))
+            ;; First block: top-level imports
+            (let ((first-block-text (buffer-substring (caar regions) (cdar regions))))
+              (should (string-match-p "import os" first-block-text))
+              (should (string-match-p "import sys" first-block-text)))
+            ;; Second block: nested imports
+            (let ((second-block-text (buffer-substring (car (nth 1 regions)) (cdr (nth 1 regions)))))
+              (should (string-match-p "import json" second-block-text))
+              (should (string-match-p "import re" second-block-text)))))))))
+
+(ert-deftest hide-imports-python-deeply-nested ()
+  "Test Python imports deeply nested in multiple levels."
+  (hide-imports-test-with-min-rows 1
+    (hide-imports-test-with-treesit-buffer "class Outer:\n    class Inner:\n        def method(self):\n            if True:\n                import datetime\n                import time\n                return 'nested'"
+      (when (hide-imports--supported-mode-p)
+        (let ((regions (hide-imports--get-imports-regions)))
+          (should regions)
+          (should (= (length regions) 1))
+          (let ((region-text (buffer-substring (caar regions) (cdar regions))))
+            (should (string-match-p "import datetime" region-text))
+            (should (string-match-p "import time" region-text))
+            (should-not (string-match-p "class Outer" region-text))
+            (should-not (string-match-p "if True" region-text))))))))
+
+(ert-deftest hide-imports-python-nested-with-comments ()
+  "Test Python nested imports with comments."
+  (hide-imports-test-with-min-rows 1
+    (hide-imports-test-with-treesit-buffer "def process_data():\n    # Need these for data processing\n    import pandas as pd\n    import numpy as np\n    # Process the data\n    return pd.DataFrame()"
+      (when (hide-imports--supported-mode-p)
+        (let ((regions (hide-imports--get-imports-regions)))
+          (should regions)
+          (should (= (length regions) 1))
+          (let ((region-text (buffer-substring (caar regions) (cdar regions))))
+            (should (string-match-p "import pandas" region-text))
+            (should (string-match-p "import numpy" region-text))
+            ;; Comments between imports should be included
+            (should (string-match-p "Need these for data processing" region-text))
+            (should-not (string-match-p "def process_data" region-text))
+            (should-not (string-match-p "Process the data" region-text))))))))
+
+(ert-deftest hide-imports-elixir-nested-in-function ()
+  "Test Elixir imports nested within a function."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
+  (hide-imports-test-with-min-rows 1
+    (hide-imports-test-with-elixir-buffer "defmodule MyModule do\n  def my_function do\n    alias MyApp.Helper\n    import Ecto.Query\n    # Some logic here\n    :ok\n  end\nend"
+      (let ((regions (hide-imports--get-imports-regions)))
+        (should regions)
+        (should (= (length regions) 1))
+        (let ((region-text (buffer-substring (caar regions) (cdar regions))))
+          (should (string-match-p "alias MyApp.Helper" region-text))
+          (should (string-match-p "import Ecto.Query" region-text))
+          (should-not (string-match-p "def my_function" region-text))
+          (should-not (string-match-p "Some logic" region-text)))))))
 
 (provide 'test-hide-imports-mode)
 

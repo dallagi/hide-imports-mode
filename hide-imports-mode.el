@@ -55,11 +55,18 @@ If the import region contains fewer rows than this value, imports will remain vi
   :type 'integer
   :group 'hide-imports)
 
+(defcustom hide-imports-hide-all-blocks nil
+  "When non-nil, hide all contiguous import blocks instead of only the first one.
+Each contiguous block of imports/comments must meet the minimum-rows threshold to be hidden."
+  :type 'boolean
+  :group 'hide-imports)
+
 (defvar hide-imports--overlays nil
   "List of overlays created by hide-imports-mode.")
 
-(defvar hide-imports--imports-region nil
-  "Cached region containing imports for auto-unhide functionality.")
+(defvar hide-imports--imports-regions nil
+  "Cached list of regions containing imports for auto-unhide functionality.
+Each element is a cons cell (START . END).")
 
 (defvar hide-imports--cursor-in-imports nil
   "Track if cursor is currently in the imports region.")
@@ -126,109 +133,40 @@ If the import region contains fewer rows than this value, imports will remain vi
     (>= (hide-imports--count-rows (car region) (cdr region))
         hide-imports-minimum-rows)))
 
-(defun hide-imports--get-imports-region ()
-  "Get the region containing imports at the top of the file using treesit."
+(defun hide-imports--get-imports-regions ()
+  "Get all regions containing imports using treesit.
+Returns a list of regions (cons cells) when hide-imports-hide-all-blocks is non-nil,
+or a list with a single region (for backward compatibility) when nil."
   (when (hide-imports--supported-mode-p)
     (when-let ((config (hide-imports--get-language-config)))
       (let ((language (alist-get 'language (cdr config)))
             (import-types (alist-get 'import-types (cdr config))))
-        (let ((region (if (eq language 'elixir)
-                          (hide-imports--get-elixir-imports-region)
-                        (hide-imports--get-standard-imports-region language import-types))))
-          (when (hide-imports--region-meets-minimum-rows-p region)
-            region))))))
+        (let ((regions (if hide-imports-hide-all-blocks
+                           (if (eq language 'elixir)
+                               (hide-imports--get-all-elixir-imports-regions)
+                             (hide-imports--get-all-standard-imports-regions language import-types))
+                         ;; Single region mode (backward compatibility)
+                         (let ((region (if (eq language 'elixir)
+                                           (hide-imports--get-elixir-imports-region)
+                                         (hide-imports--get-standard-imports-region language import-types))))
+                           (when region (list region))))))
+          ;; Filter regions that meet minimum rows requirement
+          (seq-filter #'hide-imports--region-meets-minimum-rows-p regions))))))
+
+(defun hide-imports--get-imports-region ()
+  "Get the first imports region for backward compatibility.
+Returns nil if no regions are found, or the first region as a cons cell."
+  (car (hide-imports--get-imports-regions)))
 
 (defun hide-imports--get-standard-imports-region (language import-types)
-  "Get imports region for Python and Rust languages."
-  (let ((root (treesit-buffer-root-node language))
-        (start-pos nil)
-        (end-pos nil)
-        (has-imports nil))
-    (when root
-      (let ((children (treesit-node-children root))
-            (found-non-import nil))
-        (dolist (child children)
-          (let ((node-type (treesit-node-type child)))
-            (cond
-             ((hide-imports--is-import-node-p child language import-types)
-              (setq has-imports t)
-              (unless start-pos
-                (setq start-pos (treesit-node-start child)))
-              (setq end-pos (treesit-node-end child)))
-             ((and (string= node-type "comment")
-                   has-imports
-                   (not found-non-import))
-              ;; Only include comments that are interspersed with imports
-              ;; Check if there are more imports after this comment
-              (let ((remaining-children (cdr (memq child children)))
-                    (has-more-imports nil))
-                (dolist (remaining-child remaining-children)
-                  (when (hide-imports--is-import-node-p remaining-child language import-types)
-                    (setq has-more-imports t)))
-                (when has-more-imports
-                  (setq end-pos (treesit-node-end child)))))
-             ((not (string= node-type "comment"))
-              (setq found-non-import t)))))
-        (when (and start-pos end-pos has-imports)
-          (cons start-pos end-pos))))))
+  "Get first imports region for Python and Rust languages at any nesting level."
+  (let ((regions (hide-imports--get-all-standard-imports-regions language import-types)))
+    (car regions)))
 
 (defun hide-imports--get-elixir-imports-region ()
-  "Get imports region for Elixir language."
-  (let ((root (treesit-buffer-root-node 'elixir)))
-    (when root
-      ;; Find the first defmodule
-      (let ((defmodule-node (seq-find (lambda (child)
-                                        (and (string= (treesit-node-type child) "call")
-                                             (hide-imports--is-elixir-defmodule-p child)))
-                                      (treesit-node-children root))))
-        (when defmodule-node
-          ;; Find the do_block within defmodule
-          (let ((do-block (seq-find (lambda (child)
-                                      (string= (treesit-node-type child) "do_block"))
-                                    (treesit-node-children defmodule-node))))
-            (when do-block
-              ;; Look for import statements within the do_block
-              (let ((start-pos nil)
-                    (end-pos nil)
-                    (has-imports nil)
-                    (found-non-import nil))
-                (dolist (child (treesit-node-children do-block))
-                  (let ((node-type (treesit-node-type child)))
-                    (cond
-                     ;; Skip "do" and "end" tokens
-                     ((or (string= node-type "do") (string= node-type "end"))
-                      nil)
-                     ;; If we haven't found any non-import yet, check for imports
-                     ((and (hide-imports--is-elixir-import-node-p child)
-                           (not found-non-import))
-                      (setq has-imports t)
-                      (unless start-pos
-                        (setq start-pos (treesit-node-start child)))
-                      (setq end-pos (treesit-node-end child)))
-                     ;; Comments are only included if they're between imports in the initial block
-                     ((and (string= node-type "comment")
-                           has-imports
-                           (not found-non-import))
-                      ;; Check if there are more imports immediately following this comment
-                      (let ((remaining-children (cdr (memq child (treesit-node-children do-block))))
-                            (has-immediate-import nil))
-                        (dolist (remaining-child remaining-children)
-                          (let ((remaining-type (treesit-node-type remaining-child)))
-                            (cond
-                             ((hide-imports--is-elixir-import-node-p remaining-child)
-                              (setq has-immediate-import t)
-                              (return))
-                             ((and (not (string= remaining-type "comment"))
-                                   (not (string= remaining-type "do"))
-                                   (not (string= remaining-type "end")))
-                              (return)))))
-                        (when has-immediate-import
-                          (setq end-pos (treesit-node-end child)))))
-                     ;; Any other node type means we've left the import block
-                     (t
-                      (setq found-non-import t)))))
-                (when (and start-pos end-pos has-imports)
-                  (cons start-pos end-pos))))))))))
+  "Get first imports region for Elixir language at any nesting level."
+  (let ((regions (hide-imports--get-all-elixir-imports-regions)))
+    (car regions)))
 
 (defun hide-imports--is-elixir-defmodule-p (node)
   "Check if NODE is an Elixir defmodule call."
@@ -236,6 +174,135 @@ If the import region contains fewer rows than this value, imports will remain vi
     (let ((first-child (treesit-node-child node 0)))
       (when (and first-child (string= (treesit-node-type first-child) "identifier"))
         (string= (treesit-node-text first-child) "defmodule")))))
+
+(defun hide-imports--collect-import-nodes (node language import-types)
+  "Recursively collect all import nodes from NODE and its descendants."
+  (let ((import-nodes nil))
+    (when node
+      ;; Check if current node is an import
+      (when (hide-imports--is-import-node-p node language import-types)
+        (push node import-nodes))
+      ;; Recursively check all children
+      (dolist (child (treesit-node-children node))
+        (setq import-nodes (append import-nodes 
+                                  (hide-imports--collect-import-nodes child language import-types)))))
+    import-nodes))
+
+(defun hide-imports--get-all-standard-imports-regions (language import-types)
+  "Get all contiguous import regions for Python and Rust languages at any nesting level."
+  (let ((root (treesit-buffer-root-node language))
+        (regions nil))
+    (when root
+      ;; Collect all import nodes from the entire tree
+      (let ((import-nodes (hide-imports--collect-import-nodes root language import-types)))
+        ;; Sort import nodes by position
+        (setq import-nodes (sort import-nodes (lambda (a b) 
+                                               (< (treesit-node-start a) 
+                                                  (treesit-node-start b)))))
+        ;; Group contiguous imports into regions, including comments
+        (when import-nodes
+          (let ((current-start (treesit-node-start (car import-nodes)))
+                (current-end (treesit-node-end (car import-nodes)))
+                (prev-end (treesit-node-end (car import-nodes))))
+            (dolist (node (cdr import-nodes))
+              (let ((node-start (treesit-node-start node))
+                    (node-end (treesit-node-end node)))
+                ;; Check if this import is contiguous with previous ones
+                ;; Allow for comments and whitespace between imports
+                (if (hide-imports--imports-are-contiguous-p prev-end node-start language)
+                    ;; Extend current region, potentially including intermediate content
+                    (setq current-end node-end
+                          prev-end node-end)
+                  ;; Start new region
+                  (push (cons current-start current-end) regions)
+                  (setq current-start node-start
+                        current-end node-end
+                        prev-end node-end))))
+            ;; Add final region
+            (push (cons current-start current-end) regions)
+            ;; Now expand regions to include comments and whitespace at the beginning
+            (setq regions (mapcar #'hide-imports--expand-region-for-comments regions))))))
+    (nreverse regions)))
+
+(defun hide-imports--expand-region-for-comments (region)
+  "Expand REGION to include leading comments and whitespace."
+  (let ((start (car region))
+        (end (cdr region)))
+    (save-excursion
+      ;; Look backwards from start to include comments
+      (goto-char start)
+      (beginning-of-line)
+      (let ((new-start start))
+        ;; Go backwards line by line to find comments that should be included
+        (while (and (> (point) (point-min))
+                    (progn
+                      (beginning-of-line 0) ; Go to previous line
+                      (looking-at "[ \t]*\\(#\\|//\\|$\\)"))) ; Comment or empty line
+          ;; Only include comments that appear to be related to imports
+          (when (looking-at "[ \t]*\\(#\\|//\\)")
+            (setq new-start (point))))
+        (cons new-start end)))))
+
+(defun hide-imports--imports-are-contiguous-p (prev-end current-start language)
+  "Check if imports at PREV-END and CURRENT-START are contiguous.
+Allows for comments and whitespace between them."
+  (save-excursion
+    ;; Get text between the two imports
+    (let ((between-text (buffer-substring prev-end current-start)))
+      ;; Count newlines using string matching
+      (let ((newline-count 0)
+            (pos 0))
+        (while (string-match "\n" between-text pos)
+          (setq newline-count (1+ newline-count)
+                pos (match-end 0)))
+        ;; If there are more than 2 newlines, they're not contiguous
+        (<= newline-count 2)))))
+
+(defun hide-imports--get-all-elixir-imports-regions ()
+  "Get all contiguous import regions for Elixir language at any nesting level."
+  (let ((root (treesit-buffer-root-node 'elixir))
+        (regions nil))
+    (when root
+      ;; Collect all import nodes from the entire tree
+      (let ((import-nodes (hide-imports--collect-elixir-import-nodes root)))
+        ;; Sort import nodes by position
+        (setq import-nodes (sort import-nodes (lambda (a b) 
+                                               (< (treesit-node-start a) 
+                                                  (treesit-node-start b)))))
+        ;; Group contiguous imports into regions
+        (when import-nodes
+          (let ((current-start (treesit-node-start (car import-nodes)))
+                (current-end (treesit-node-end (car import-nodes)))
+                (prev-end (treesit-node-end (car import-nodes))))
+            (dolist (node (cdr import-nodes))
+              (let ((node-start (treesit-node-start node))
+                    (node-end (treesit-node-end node)))
+                ;; Check if this import is contiguous with previous ones
+                (if (hide-imports--imports-are-contiguous-p prev-end node-start 'elixir)
+                    ;; Extend current region
+                    (setq current-end node-end
+                          prev-end node-end)
+                  ;; Start new region
+                  (push (cons current-start current-end) regions)
+                  (setq current-start node-start
+                        current-end node-end
+                        prev-end node-end))))
+            ;; Add final region
+            (push (cons current-start current-end) regions)))))
+    (nreverse regions)))
+
+(defun hide-imports--collect-elixir-import-nodes (node)
+  "Recursively collect all Elixir import nodes from NODE and its descendants."
+  (let ((import-nodes nil))
+    (when node
+      ;; Check if current node is an import
+      (when (hide-imports--is-elixir-import-node-p node)
+        (push node import-nodes))
+      ;; Recursively check all children
+      (dolist (child (treesit-node-children node))
+        (setq import-nodes (append import-nodes 
+                                  (hide-imports--collect-elixir-import-nodes child)))))
+    import-nodes))
 
 (defun hide-imports--create-overlay (start end &optional window)
   "Create an overlay to hide imports from START to END, visible only in WINDOW.
@@ -281,22 +348,25 @@ If WINDOW is nil, remove all overlays."
             hide-imports--overlays))
 
 (defun hide-imports--create-window-overlay (window)
-  "Create overlay for WINDOW to hide imports."
+  "Create overlays for WINDOW to hide imports."
   (when (hide-imports--supported-mode-p)
-    (let ((region (hide-imports--get-imports-region)))
-      (when region
-        (setq hide-imports--imports-region region)
-        (hide-imports--create-overlay (car region) (cdr region) window)))))
+    (let ((regions (hide-imports--get-imports-regions)))
+      (when regions
+        (setq hide-imports--imports-regions regions)
+        (dolist (region regions)
+          (hide-imports--create-overlay (car region) (cdr region) window))))))
 
 (defun hide-imports--cursor-in-imports-p (&optional window)
-  "Check if cursor is currently in the imports region for WINDOW.
+  "Check if cursor is currently in any imports region for WINDOW.
 If WINDOW is nil, use the selected window."
-  (when hide-imports--imports-region
+  (when hide-imports--imports-regions
     (let ((pos (if window
                    (window-point window)
                  (point))))
-      (and (>= pos (car hide-imports--imports-region))
-           (<= pos (cdr hide-imports--imports-region))))))
+      (seq-some (lambda (region)
+                  (and (>= pos (car region))
+                       (<= pos (cdr region))))
+                hide-imports--imports-regions))))
 
 (defun hide-imports--get-window-state (window)
   "Get the cursor-in-imports state for WINDOW."
@@ -323,25 +393,30 @@ If WINDOW is nil, use the selected window."
 
 (defun hide-imports--position-cursor-in-imports ()
   "Position cursor appropriately when entering imports region."
-  (when hide-imports--imports-region
+  (when hide-imports--imports-regions
     (let* ((current-pos (point))
-           (imports-start (car hide-imports--imports-region))
-           (imports-end (cdr hide-imports--imports-region))
            (last-pos hide-imports--last-cursor-position))
       
-      ;; Only adjust if we have previous position and cursor moved into imports from outside
-      (when (and last-pos
-                 (or (< last-pos imports-start) (> last-pos imports-end)))
-        (cond
-         ;; Coming from above (last position was before imports) - go to beginning
-         ((< last-pos imports-start)
-          (goto-char imports-start))
-         ;; Coming from below (last position was after imports) - go to end
-         ((> last-pos imports-end)
-          (goto-char (save-excursion
-                       (goto-char imports-end)
-                       (beginning-of-line)
-                       (point)))))))))
+      ;; Find which region the cursor is in
+      (let ((current-region (seq-find (lambda (region)
+                                        (and (>= current-pos (car region))
+                                             (<= current-pos (cdr region))))
+                                      hide-imports--imports-regions)))
+        (when (and current-region last-pos)
+          (let ((imports-start (car current-region))
+                (imports-end (cdr current-region)))
+            ;; Only adjust if cursor moved into this region from outside
+            (when (or (< last-pos imports-start) (> last-pos imports-end))
+              (cond
+               ;; Coming from above (last position was before imports) - go to beginning
+               ((< last-pos imports-start)
+                (goto-char imports-start))
+               ;; Coming from below (last position was after imports) - go to end
+               ((> last-pos imports-end)
+                (goto-char (save-excursion
+                             (goto-char imports-end)
+                             (beginning-of-line)
+                             (point))))))))))))
 
 (defun hide-imports--post-command-hook ()
   "Handle cursor movement for auto-unhide functionality."
@@ -355,7 +430,7 @@ If WINDOW is nil, use the selected window."
       (when (and cursor-in-imports 
                  window-has-overlays
                  (not previous-cursor-in-imports)
-                 hide-imports--imports-region)
+                 hide-imports--imports-regions)
         (hide-imports--position-cursor-in-imports))
 
       ;; Update window state for current window
@@ -381,14 +456,15 @@ If WINDOW is nil, use the selected window."
 (defun hide-imports--hide-imports ()
   "Hide imports in the current buffer for all windows."
   (when (hide-imports--supported-mode-p)
-    (let ((region (hide-imports--get-imports-region)))
-      (when region
-        (setq hide-imports--imports-region region)
+    (let ((regions (hide-imports--get-imports-regions)))
+      (when regions
+        (setq hide-imports--imports-regions regions)
         ;; Create overlays for all windows showing this buffer where cursor is not in imports
         (dolist (window (window-list))
           (when (eq (window-buffer window) (current-buffer))
             (unless (hide-imports--cursor-in-imports-p window)
-              (hide-imports--create-overlay (car region) (cdr region) window))))))))
+              (dolist (region regions)
+                (hide-imports--create-overlay (car region) (cdr region) window)))))))))
 
 (defun hide-imports--show-imports ()
   "Show imports in the current buffer for all windows."
@@ -411,7 +487,7 @@ If WINDOW is nil, use the selected window."
         (add-hook 'post-command-hook 'hide-imports--post-command-hook nil t))
     (progn
       (hide-imports--show-imports)
-      (setq hide-imports--imports-region nil)
+      (setq hide-imports--imports-regions nil)
       (setq hide-imports--cursor-in-imports nil)
       (setq hide-imports--last-cursor-position nil)
       ;; Clean up window states for this buffer
@@ -437,7 +513,7 @@ If WINDOW is nil, use the selected window."
                          (lambda ()
                            (when (buffer-live-p (current-buffer))
                              (with-current-buffer (current-buffer)
-                               (setq hide-imports--imports-region nil)
+                               (setq hide-imports--imports-regions nil)
                                (setq hide-imports--cursor-in-imports nil)
                                (hide-imports--show-imports)
                                (hide-imports--hide-imports)))))))
