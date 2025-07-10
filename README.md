@@ -59,9 +59,17 @@ Using `use-package` and `:vc`:
 
 ## Configuration
 
--   `hide-imports-replacement-text`: Customize the text displayed when imports are hidden (default: "Imports").
+-   `hide-imports-replacement-text`: Customize the text displayed when imports are hidden (default: "Imports...").
     ```emacs-lisp
     (setq hide-imports-replacement-text "...")
+    ```
+-   `hide-imports-minimum-rows`: Minimum number of rows required to hide imports (default: 3). If the import region contains fewer rows than this value, imports will remain visible.
+    ```emacs-lisp
+    ;; Hide imports only if there are 5+ rows
+    (setq hide-imports-minimum-rows 5)
+
+    ;; Hide all imports, even single lines
+    (setq hide-imports-minimum-rows 1)
     ```
 -   `hide-imports-global-modes`: A list of major modes where `hide-imports-global-mode` should activate `hide-imports-mode`.
     ```emacs-lisp
