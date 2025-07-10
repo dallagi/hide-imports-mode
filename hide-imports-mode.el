@@ -67,6 +67,9 @@ If the import region contains fewer rows than this value, imports will remain vi
 (defvar hide-imports--window-states nil
   "Alist mapping windows to their cursor-in-imports state.")
 
+(defvar-local hide-imports--last-cursor-position nil
+  "Last cursor position to detect movement direction.")
+
 (defvar hide-imports--language-configs
   '((python . ((modes . (python-ts-mode python-mode))
                (language . python)
@@ -318,12 +321,42 @@ If WINDOW is nil, use the selected window."
                      (hide-imports--cursor-in-imports-p window)))
               (window-list))))
 
+(defun hide-imports--position-cursor-in-imports ()
+  "Position cursor appropriately when entering imports region."
+  (when hide-imports--imports-region
+    (let* ((current-pos (point))
+           (imports-start (car hide-imports--imports-region))
+           (imports-end (cdr hide-imports--imports-region))
+           (last-pos hide-imports--last-cursor-position))
+      
+      ;; Only adjust if we have previous position and cursor moved into imports from outside
+      (when (and last-pos
+                 (or (< last-pos imports-start) (> last-pos imports-end)))
+        (cond
+         ;; Coming from above (last position was before imports) - go to beginning
+         ((< last-pos imports-start)
+          (goto-char imports-start))
+         ;; Coming from below (last position was after imports) - go to end
+         ((> last-pos imports-end)
+          (goto-char (save-excursion
+                       (goto-char imports-end)
+                       (beginning-of-line)
+                       (point)))))))))
+
 (defun hide-imports--post-command-hook ()
   "Handle cursor movement for auto-unhide functionality."
   (when hide-imports-mode
     (let* ((current-window (selected-window))
            (cursor-in-imports (hide-imports--cursor-in-imports-p))
-           (window-has-overlays (hide-imports--window-has-overlays-p current-window)))
+           (window-has-overlays (hide-imports--window-has-overlays-p current-window))
+           (previous-cursor-in-imports (hide-imports--get-window-state current-window)))
+
+      ;; Handle cursor positioning when entering imports region
+      (when (and cursor-in-imports 
+                 window-has-overlays
+                 (not previous-cursor-in-imports)
+                 hide-imports--imports-region)
+        (hide-imports--position-cursor-in-imports))
 
       ;; Update window state for current window
       (hide-imports--set-window-state current-window cursor-in-imports)
@@ -340,7 +373,10 @@ If WINDOW is nil, use the selected window."
        ((not cursor-in-imports)
         ;; Cursor not in imports - hide imports in this window (add overlays)
         (unless window-has-overlays
-          (hide-imports--create-window-overlay current-window)))))))
+          (hide-imports--create-window-overlay current-window))))
+      
+      ;; Update last cursor position for next command
+      (setq hide-imports--last-cursor-position (point)))))
 
 (defun hide-imports--hide-imports ()
   "Hide imports in the current buffer for all windows."
@@ -369,6 +405,7 @@ If WINDOW is nil, use the selected window."
   (if hide-imports-mode
       (progn
         (setq hide-imports--cursor-in-imports nil)
+        (setq hide-imports--last-cursor-position (point))
         (hide-imports--hide-imports)
         (add-hook 'after-change-functions 'hide-imports--after-change nil t)
         (add-hook 'post-command-hook 'hide-imports--post-command-hook nil t))
@@ -376,6 +413,7 @@ If WINDOW is nil, use the selected window."
       (hide-imports--show-imports)
       (setq hide-imports--imports-region nil)
       (setq hide-imports--cursor-in-imports nil)
+      (setq hide-imports--last-cursor-position nil)
       ;; Clean up window states for this buffer
       (setq hide-imports--window-states
             (seq-filter (lambda (entry)

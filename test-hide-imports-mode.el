@@ -216,11 +216,16 @@
 
 (ert-deftest hide-imports-empty-buffer ()
   "Test behavior with empty buffer."
-  (hide-imports-test-with-treesit-buffer ""
-    (when (hide-imports--supported-mode-p)
-      (should-not (hide-imports--get-imports-region))
-      (hide-imports--hide-imports)
-      (should-not hide-imports--overlays))))
+  (let ((original-overlays hide-imports--overlays))
+    (unwind-protect
+        (progn
+          (setq hide-imports--overlays nil)  ; Start with clean state
+          (hide-imports-test-with-treesit-buffer ""
+            (when (hide-imports--supported-mode-p)
+              (should-not (hide-imports--get-imports-region))
+              (hide-imports--hide-imports)
+              (should-not hide-imports--overlays))))
+      (setq hide-imports--overlays original-overlays))))
 
 (ert-deftest hide-imports-only-comments ()
   "Test behavior with only comments at top."
