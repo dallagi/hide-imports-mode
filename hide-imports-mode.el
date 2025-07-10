@@ -44,7 +44,7 @@
   :group 'hide-imports)
 
 (defcustom hide-imports-global-modes
-  '(python-mode python-ts-mode rust-mode rust-ts-mode rustic-mode)
+  '(python-mode python-ts-mode rust-mode rust-ts-mode rustic-mode elixir-mode elixir-ts-mode)
   "List of major modes where hide-imports-global-mode should be enabled."
   :type '(repeat (symbol :tag "Major mode"))
   :group 'hide-imports)
@@ -67,7 +67,10 @@
                (import-types . ("import_statement" "import_from_statement"))))
     (rust . ((modes . (rust-ts-mode rust-mode rustic-mode))
              (language . rust)
-             (import-types . ("use_declaration" "extern_crate_declaration")))))
+             (import-types . ("use_declaration" "extern_crate_declaration"))))
+    (elixir . ((modes . (elixir-ts-mode elixir-mode))
+               (language . elixir)
+               (import-types . ("call")))))
   "Configuration for different languages.")
 
 (defun hide-imports--get-language-config ()
@@ -84,43 +87,129 @@
       (and (treesit-available-p)
            (treesit-language-available-p language)))))
 
+(defun hide-imports--is-import-node-p (node language import-types)
+  "Check if NODE is an import node for LANGUAGE using IMPORT-TYPES."
+  (let ((node-type (treesit-node-type node)))
+    (if (eq language 'elixir)
+        (hide-imports--is-elixir-import-node-p node)
+      (member node-type import-types))))
+
+(defun hide-imports--is-elixir-import-node-p (node)
+  "Check if NODE is an Elixir import node (alias, import, require, use)."
+  (when (string= (treesit-node-type node) "call")
+    (let ((first-child (treesit-node-child node 0)))
+      (when (and first-child (string= (treesit-node-type first-child) "identifier"))
+        (let ((func-name (treesit-node-text first-child)))
+          (member func-name '("alias" "import" "require" "use")))))))
+
 (defun hide-imports--get-imports-region ()
   "Get the region containing imports at the top of the file using treesit."
   (when (hide-imports--supported-mode-p)
     (when-let ((config (hide-imports--get-language-config)))
       (let ((language (alist-get 'language (cdr config)))
             (import-types (alist-get 'import-types (cdr config))))
-        (let ((root (treesit-buffer-root-node language))
-              (start-pos nil)
-              (end-pos nil)
-              (has-imports nil))
-          (when root
-            (let ((children (treesit-node-children root))
-                  (found-non-import nil))
-              (dolist (child children)
-                (let ((node-type (treesit-node-type child)))
-                  (cond
-                   ((member node-type import-types)
-                    (setq has-imports t)
-                    (unless start-pos
-                      (setq start-pos (treesit-node-start child)))
-                    (setq end-pos (treesit-node-end child)))
-                   ((and (string= node-type "comment")
-                         has-imports
-                         (not found-non-import))
-                    ;; Only include comments that are interspersed with imports
-                    ;; Check if there are more imports after this comment
-                    (let ((remaining-children (cdr (memq child children)))
-                          (has-more-imports nil))
-                      (dolist (remaining-child remaining-children)
-                        (when (member (treesit-node-type remaining-child) import-types)
-                          (setq has-more-imports t)))
-                      (when has-more-imports
-                        (setq end-pos (treesit-node-end child)))))
-                   ((not (string= node-type "comment"))
-                    (setq found-non-import t)))))
-              (when (and start-pos end-pos has-imports)
-                (cons start-pos end-pos)))))))))
+        (if (eq language 'elixir)
+            (hide-imports--get-elixir-imports-region)
+          (hide-imports--get-standard-imports-region language import-types))))))
+
+(defun hide-imports--get-standard-imports-region (language import-types)
+  "Get imports region for Python and Rust languages."
+  (let ((root (treesit-buffer-root-node language))
+        (start-pos nil)
+        (end-pos nil)
+        (has-imports nil))
+    (when root
+      (let ((children (treesit-node-children root))
+            (found-non-import nil))
+        (dolist (child children)
+          (let ((node-type (treesit-node-type child)))
+            (cond
+             ((hide-imports--is-import-node-p child language import-types)
+              (setq has-imports t)
+              (unless start-pos
+                (setq start-pos (treesit-node-start child)))
+              (setq end-pos (treesit-node-end child)))
+             ((and (string= node-type "comment")
+                   has-imports
+                   (not found-non-import))
+              ;; Only include comments that are interspersed with imports
+              ;; Check if there are more imports after this comment
+              (let ((remaining-children (cdr (memq child children)))
+                    (has-more-imports nil))
+                (dolist (remaining-child remaining-children)
+                  (when (hide-imports--is-import-node-p remaining-child language import-types)
+                    (setq has-more-imports t)))
+                (when has-more-imports
+                  (setq end-pos (treesit-node-end child)))))
+             ((not (string= node-type "comment"))
+              (setq found-non-import t)))))
+        (when (and start-pos end-pos has-imports)
+          (cons start-pos end-pos))))))
+
+(defun hide-imports--get-elixir-imports-region ()
+  "Get imports region for Elixir language."
+  (let ((root (treesit-buffer-root-node 'elixir)))
+    (when root
+      ;; Find the first defmodule
+      (let ((defmodule-node (seq-find (lambda (child)
+                                        (and (string= (treesit-node-type child) "call")
+                                             (hide-imports--is-elixir-defmodule-p child)))
+                                      (treesit-node-children root))))
+        (when defmodule-node
+          ;; Find the do_block within defmodule
+          (let ((do-block (seq-find (lambda (child)
+                                      (string= (treesit-node-type child) "do_block"))
+                                    (treesit-node-children defmodule-node))))
+            (when do-block
+              ;; Look for import statements within the do_block
+              (let ((start-pos nil)
+                    (end-pos nil)
+                    (has-imports nil)
+                    (found-non-import nil))
+                (dolist (child (treesit-node-children do-block))
+                  (let ((node-type (treesit-node-type child)))
+                    (cond
+                     ;; Skip "do" and "end" tokens
+                     ((or (string= node-type "do") (string= node-type "end"))
+                      nil)
+                     ;; If we haven't found any non-import yet, check for imports
+                     ((and (hide-imports--is-elixir-import-node-p child)
+                           (not found-non-import))
+                      (setq has-imports t)
+                      (unless start-pos
+                        (setq start-pos (treesit-node-start child)))
+                      (setq end-pos (treesit-node-end child)))
+                     ;; Comments are only included if they're between imports in the initial block
+                     ((and (string= node-type "comment")
+                           has-imports
+                           (not found-non-import))
+                      ;; Check if there are more imports immediately following this comment
+                      (let ((remaining-children (cdr (memq child (treesit-node-children do-block))))
+                            (has-immediate-import nil))
+                        (dolist (remaining-child remaining-children)
+                          (let ((remaining-type (treesit-node-type remaining-child)))
+                            (cond
+                             ((hide-imports--is-elixir-import-node-p remaining-child)
+                              (setq has-immediate-import t)
+                              (return))
+                             ((and (not (string= remaining-type "comment"))
+                                   (not (string= remaining-type "do"))
+                                   (not (string= remaining-type "end")))
+                              (return)))))
+                        (when has-immediate-import
+                          (setq end-pos (treesit-node-end child)))))
+                     ;; Any other node type means we've left the import block
+                     (t
+                      (setq found-non-import t)))))
+                (when (and start-pos end-pos has-imports)
+                  (cons start-pos end-pos))))))))))
+
+(defun hide-imports--is-elixir-defmodule-p (node)
+  "Check if NODE is an Elixir defmodule call."
+  (when (string= (treesit-node-type node) "call")
+    (let ((first-child (treesit-node-child node 0)))
+      (when (and first-child (string= (treesit-node-type first-child) "identifier"))
+        (string= (treesit-node-text first-child) "defmodule")))))
 
 (defun hide-imports--create-overlay (start end &optional window)
   "Create an overlay to hide imports from START to END, visible only in WINDOW.

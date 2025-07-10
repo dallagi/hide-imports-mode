@@ -600,6 +600,117 @@ print('hello')"
     (let ((region (hide-imports--get-imports-region)))
       (should-not region))))
 
+;;; Elixir Language Tests
+
+(defmacro hide-imports-test-with-elixir-buffer (content &rest body)
+  "Create a temporary buffer with CONTENT for Elixir testing and execute BODY."
+  (declare (indent 1))
+  `(with-temp-buffer
+     (insert ,content)
+     (let ((inhibit-message t))
+       (if (and (treesit-available-p) (treesit-language-available-p 'elixir))
+           (progn
+             (setq major-mode 'elixir-ts-mode)
+             (treesit-parser-create 'elixir))
+         (setq major-mode 'elixir-ts-mode))
+       (goto-char (point-min))
+       ,@body)))
+
+(ert-deftest hide-imports-elixir-basic-imports ()
+  "Test basic Elixir import detection."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
+  (hide-imports-test-with-elixir-buffer "defmodule MyApp.User do\n  use Ecto.Schema\n  alias MyApp.{Repo, Auth}\n  import Ecto.Query\n  require Logger\n\n  def create_user(attrs) do\n    # implementation\n  end\nend"
+    (let ((region (hide-imports--get-imports-region)))
+      (should region)
+      (let ((imports-text (buffer-substring (car region) (cdr region))))
+        (should (string-match-p "use Ecto.Schema" imports-text))
+        (should (string-match-p "alias MyApp.{Repo, Auth}" imports-text))
+        (should (string-match-p "import Ecto.Query" imports-text))
+        (should (string-match-p "require Logger" imports-text))
+        (should-not (string-match-p "def create_user" imports-text))))))
+
+(ert-deftest hide-imports-elixir-alias-variations ()
+  "Test Elixir alias variations."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
+  (hide-imports-test-with-elixir-buffer "defmodule MyApp.Controller do\n  alias MyApp.User\n  alias MyApp.Authentication.Guardian, as: Auth\n  alias MyApp.{Post, Comment}\n\n  def index do\n    # implementation\n  end\nend"
+    (let ((region (hide-imports--get-imports-region)))
+      (should region)
+      (let ((imports-text (buffer-substring (car region) (cdr region))))
+        (should (string-match-p "alias MyApp.User" imports-text))
+        (should (string-match-p "alias MyApp.Authentication.Guardian, as: Auth" imports-text))
+        (should (string-match-p "alias MyApp.{Post, Comment}" imports-text))
+        (should-not (string-match-p "def index" imports-text))))))
+
+(ert-deftest hide-imports-elixir-import-with-options ()
+  "Test Elixir import with options."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
+  (hide-imports-test-with-elixir-buffer "defmodule MyApp.Helper do\n  import Enum, only: [map: 2, filter: 2]\n  import String, except: [split: 2]\n\n  def process_data(data) do\n    # implementation\n  end\nend"
+    (let ((region (hide-imports--get-imports-region)))
+      (should region)
+      (let ((imports-text (buffer-substring (car region) (cdr region))))
+        (should (string-match-p "import Enum, only: \\[map: 2, filter: 2\\]" imports-text))
+        (should (string-match-p "import String, except: \\[split: 2\\]" imports-text))
+        (should-not (string-match-p "def process_data" imports-text))))))
+
+(ert-deftest hide-imports-elixir-mixed-directives ()
+  "Test Elixir mixed import directives."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
+  (hide-imports-test-with-elixir-buffer "defmodule MyApp.Worker do\n  use GenServer\n  alias MyApp.{Cache, Database}\n  import MyApp.Helpers\n  require Logger\n\n  def start_link(opts) do\n    GenServer.start_link(__MODULE__, opts)\n  end\nend"
+    (let ((region (hide-imports--get-imports-region)))
+      (should region)
+      (let ((imports-text (buffer-substring (car region) (cdr region))))
+        (should (string-match-p "use GenServer" imports-text))
+        (should (string-match-p "alias MyApp.{Cache, Database}" imports-text))
+        (should (string-match-p "import MyApp.Helpers" imports-text))
+        (should (string-match-p "require Logger" imports-text))
+        (should-not (string-match-p "def start_link" imports-text))))))
+
+(ert-deftest hide-imports-elixir-with-comments ()
+  "Test Elixir imports with comments."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
+  (hide-imports-test-with-elixir-buffer "defmodule MyApp.Controller do\n  use Phoenix.Controller\n  # Authentication modules\n  alias MyApp.Auth\n  # Database modules\n  alias MyApp.Repo\n\n  # This comment is after imports\n  def index(conn, _params) do\n    # implementation\n  end\nend"
+    (let ((region (hide-imports--get-imports-region)))
+      (should region)
+      (let ((imports-text (buffer-substring (car region) (cdr region))))
+        (should (string-match-p "use Phoenix.Controller" imports-text))
+        (should (string-match-p "# Authentication modules" imports-text))
+        (should (string-match-p "alias MyApp.Auth" imports-text))
+        (should (string-match-p "# Database modules" imports-text))
+        (should (string-match-p "alias MyApp.Repo" imports-text))
+        (should-not (string-match-p "# This comment is after imports" imports-text))
+        (should-not (string-match-p "def index" imports-text))))))
+
+(ert-deftest hide-imports-elixir-no-imports ()
+  "Test Elixir behavior when there are no imports."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
+  (hide-imports-test-with-elixir-buffer "defmodule MyApp.Utils do\n  def format_string(str) do\n    String.upcase(str)\n  end\n\n  def calculate(x, y) do\n    x + y\n  end\nend"
+    (let ((region (hide-imports--get-imports-region)))
+      (should-not region))))
+
+(ert-deftest hide-imports-elixir-imports-with-function-between ()
+  "Test that Elixir only hides the first block of imports, not imports after functions."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
+  (hide-imports-test-with-elixir-buffer "defmodule MyApp.Controller do\n  use Phoenix.Controller\n  alias MyApp.User\n\n  def index(conn, _params) do\n    # function implementation\n  end\n\n  # This import should NOT be hidden\n  import Ecto.Query\n\n  def show(conn, %{\"id\" => id}) do\n    # another function\n  end\nend"
+    (let ((region (hide-imports--get-imports-region)))
+      (should region)
+      (let ((imports-text (buffer-substring (car region) (cdr region))))
+        (should (string-match-p "use Phoenix.Controller" imports-text))
+        (should (string-match-p "alias MyApp.User" imports-text))
+        (should-not (string-match-p "def index" imports-text))
+        (should-not (string-match-p "import Ecto.Query" imports-text))
+        (should-not (string-match-p "def show" imports-text))))))
+
+(ert-deftest hide-imports-elixir-mode-support ()
+  "Test that Elixir mode is properly supported."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
+  (hide-imports-test-with-elixir-buffer "defmodule Test do\n  alias MyApp.User\nend"
+    (should (hide-imports--supported-mode-p))
+    (let ((config (hide-imports--get-language-config)))
+      (should config)
+      (should (eq (car config) 'elixir))
+      (should (equal (alist-get 'language (cdr config)) 'elixir))
+      (should (equal (alist-get 'import-types (cdr config)) '("call"))))))
+
 (provide 'test-hide-imports-mode)
 
 ;;; test-hide-imports-mode.el ends here
