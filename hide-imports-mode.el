@@ -49,6 +49,12 @@
   :type '(repeat (symbol :tag "Major mode"))
   :group 'hide-imports)
 
+(defcustom hide-imports-minimum-rows 3
+  "Minimum number of rows required to hide imports.
+If the import region contains fewer rows than this value, imports will remain visible."
+  :type 'integer
+  :group 'hide-imports)
+
 (defvar hide-imports--overlays nil
   "List of overlays created by hide-imports-mode.")
 
@@ -102,15 +108,32 @@
         (let ((func-name (treesit-node-text first-child)))
           (member func-name '("alias" "import" "require" "use")))))))
 
+(defun hide-imports--count-rows (start end)
+  "Count the number of rows between START and END positions."
+  (save-excursion
+    (goto-char start)
+    (let ((start-line (line-number-at-pos)))
+      (goto-char end)
+      (let ((end-line (line-number-at-pos)))
+        (1+ (- end-line start-line))))))
+
+(defun hide-imports--region-meets-minimum-rows-p (region)
+  "Check if REGION has at least `hide-imports-minimum-rows` rows."
+  (when region
+    (>= (hide-imports--count-rows (car region) (cdr region))
+        hide-imports-minimum-rows)))
+
 (defun hide-imports--get-imports-region ()
   "Get the region containing imports at the top of the file using treesit."
   (when (hide-imports--supported-mode-p)
     (when-let ((config (hide-imports--get-language-config)))
       (let ((language (alist-get 'language (cdr config)))
             (import-types (alist-get 'import-types (cdr config))))
-        (if (eq language 'elixir)
-            (hide-imports--get-elixir-imports-region)
-          (hide-imports--get-standard-imports-region language import-types))))))
+        (let ((region (if (eq language 'elixir)
+                          (hide-imports--get-elixir-imports-region)
+                        (hide-imports--get-standard-imports-region language import-types))))
+          (when (hide-imports--region-meets-minimum-rows-p region)
+            region))))))
 
 (defun hide-imports--get-standard-imports-region (language import-types)
   "Get imports region for Python and Rust languages."

@@ -40,6 +40,16 @@
        (goto-char (point-min))
        ,@body)))
 
+(defmacro hide-imports-test-with-min-rows (min-rows &rest body)
+  "Execute BODY with hide-imports-minimum-rows temporarily set to MIN-ROWS."
+  (declare (indent 1))
+  `(let ((original-min-rows hide-imports-minimum-rows))
+     (unwind-protect
+         (progn
+           (setq hide-imports-minimum-rows ,min-rows)
+           ,@body)
+       (setq hide-imports-minimum-rows original-min-rows))))
+
 ;;; Basic Mode Tests
 
 (ert-deftest hide-imports-mode-activation ()
@@ -71,20 +81,22 @@
 
 (ert-deftest hide-imports-import-region-simple ()
   "Test detection of simple import statements."
-  (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\nprint('hello')"
-    (when (hide-imports--supported-mode-p)
-      (let ((region (hide-imports--get-imports-region)))
-        (should region)
-        (should (= (car region) 1))
-        (should (> (cdr region) 1))))))
+  (hide-imports-test-with-min-rows 1
+    (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\nprint('hello')"
+      (when (hide-imports--supported-mode-p)
+        (let ((region (hide-imports--get-imports-region)))
+          (should region)
+          (should (= (car region) 1))
+          (should (> (cdr region) 1)))))))
 
 (ert-deftest hide-imports-import-region-with-from ()
   "Test detection of 'from...import' statements."
-  (hide-imports-test-with-treesit-buffer "from os import path\nfrom sys import argv\n\nprint('hello')"
-    (when (hide-imports--supported-mode-p)
-      (let ((region (hide-imports--get-imports-region)))
-        (should region)
-        (should (= (car region) 1))))))
+  (hide-imports-test-with-min-rows 1
+    (hide-imports-test-with-treesit-buffer "from os import path\nfrom sys import argv\n\nprint('hello')"
+      (when (hide-imports--supported-mode-p)
+        (let ((region (hide-imports--get-imports-region)))
+          (should region)
+          (should (= (car region) 1)))))))
 
 (ert-deftest hide-imports-import-region-with-comments ()
   "Test detection of imports with comments."
@@ -134,15 +146,16 @@
 
 (ert-deftest hide-imports-hide-show-cycle ()
   "Test hiding and showing imports."
-  (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\nprint('hello')"
-    (when (hide-imports--supported-mode-p)
-      ;; Move cursor away from imports region to ensure overlays are created
-      (goto-char (point-max))
-      (hide-imports--hide-imports)
-      ;; With window-local overlays, we need to check for window-specific overlays
-      (should (hide-imports--window-has-overlays-p (selected-window)))
-      (hide-imports--show-imports)
-      (should-not hide-imports--overlays))))
+  (hide-imports-test-with-min-rows 1
+    (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\nprint('hello')"
+      (when (hide-imports--supported-mode-p)
+        ;; Move cursor away from imports region to ensure overlays are created
+        (goto-char (point-max))
+        (hide-imports--hide-imports)
+        ;; With window-local overlays, we need to check for window-specific overlays
+        (should (hide-imports--window-has-overlays-p (selected-window)))
+        (hide-imports--show-imports)
+        (should-not hide-imports--overlays)))))
 
 ;;; Cursor Movement Tests
 
@@ -237,19 +250,20 @@
 
 (ert-deftest hide-imports-cleanup-on-disable ()
   "Test proper cleanup when mode is disabled."
-  (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\nprint('hello')"
-    (when (hide-imports--supported-mode-p)
-      ;; Move cursor away from imports region
-      (goto-char (point-max))
-      (hide-imports-mode 1)
-      ;; Need to trigger post-command hook to create overlays
-      (hide-imports--post-command-hook)
-      (should hide-imports--overlays)
-      (should hide-imports--imports-region)
-      (hide-imports-mode -1)
-      (should-not hide-imports--overlays)
-      (should-not hide-imports--imports-region)
-      (should-not hide-imports--cursor-in-imports))))
+  (hide-imports-test-with-min-rows 1
+    (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\nprint('hello')"
+      (when (hide-imports--supported-mode-p)
+        ;; Move cursor away from imports region
+        (goto-char (point-max))
+        (hide-imports-mode 1)
+        ;; Need to trigger post-command hook to create overlays
+        (hide-imports--post-command-hook)
+        (should hide-imports--overlays)
+        (should hide-imports--imports-region)
+        (hide-imports-mode -1)
+        (should-not hide-imports--overlays)
+        (should-not hide-imports--imports-region)
+        (should-not hide-imports--cursor-in-imports)))))
 
 ;;; Global Mode Tests
 
@@ -273,15 +287,16 @@
         (progn
           (setq hide-imports-global-modes '(python-mode python-ts-mode))
           (hide-imports-global-mode 1)
-          (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\nprint('hello')"
-            ;; Move cursor away from imports region
-            (goto-char (point-max))
-            ;; Manually trigger the function since the test doesn't go through normal buffer creation
-            (hide-imports--maybe-turn-on)
-            (should hide-imports-mode)
-            ;; Need to trigger post-command hook to create overlays
-            (hide-imports--post-command-hook)
-            (should hide-imports--overlays)))
+          (hide-imports-test-with-min-rows 1
+            (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\nprint('hello')"
+              ;; Move cursor away from imports region
+              (goto-char (point-max))
+              ;; Manually trigger the function since the test doesn't go through normal buffer creation
+              (hide-imports--maybe-turn-on)
+              (should hide-imports-mode)
+              ;; Need to trigger post-command hook to create overlays
+              (hide-imports--post-command-hook)
+              (should hide-imports--overlays))))
       (hide-imports-global-mode -1)
       (setq hide-imports-global-modes original-global-modes))))
 
@@ -293,15 +308,16 @@
         (progn
           (setq hide-imports-global-modes '(rust-ts-mode rust-mode))
           (hide-imports-global-mode 1)
-          (hide-imports-test-with-rust-buffer "use std::collections::HashMap;\nuse std::fs;\n\nfn main() {\n    println!(\"Hello\");\n}"
-            ;; Move cursor away from imports region
-            (goto-char (point-max))
-            ;; Manually trigger the function since the test doesn't go through normal buffer creation
-            (hide-imports--maybe-turn-on)
-            (should hide-imports-mode)
-            ;; Need to trigger post-command hook to create overlays
-            (hide-imports--post-command-hook)
-            (should hide-imports--overlays)))
+          (hide-imports-test-with-min-rows 1
+            (hide-imports-test-with-rust-buffer "use std::collections::HashMap;\nuse std::fs;\n\nfn main() {\n    println!(\"Hello\");\n}"
+              ;; Move cursor away from imports region
+              (goto-char (point-max))
+              ;; Manually trigger the function since the test doesn't go through normal buffer creation
+              (hide-imports--maybe-turn-on)
+              (should hide-imports-mode)
+              ;; Need to trigger post-command hook to create overlays
+              (hide-imports--post-command-hook)
+              (should hide-imports--overlays))))
       (hide-imports-global-mode -1)
       (setq hide-imports-global-modes original-global-modes))))
 
@@ -563,23 +579,25 @@ print('hello')"
 (ert-deftest hide-imports-rust-single-use-declaration ()
   "Test Rust with only a single use declaration."
   (skip-unless (and (treesit-available-p) (treesit-language-available-p 'rust)))
-  (hide-imports-test-with-rust-buffer "use std::collections::HashMap;\n\nfn main() {\n    let map = HashMap::new();\n}"
-    (let ((region (hide-imports--get-imports-region)))
-      (should region)
-      (should (= (car region) 1))
-      (let ((imports-text (buffer-substring (car region) (cdr region))))
-        (should (string= imports-text "use std::collections::HashMap;"))))))
+  (hide-imports-test-with-min-rows 1
+    (hide-imports-test-with-rust-buffer "use std::collections::HashMap;\n\nfn main() {\n    let map = HashMap::new();\n}"
+      (let ((region (hide-imports--get-imports-region)))
+        (should region)
+        (should (= (car region) 1))
+        (let ((imports-text (buffer-substring (car region) (cdr region))))
+          (should (string= imports-text "use std::collections::HashMap;")))))))
 
 (ert-deftest hide-imports-rust-extern-crate-only ()
   "Test Rust with only extern crate declarations."
   (skip-unless (and (treesit-available-p) (treesit-language-available-p 'rust)))
-  (hide-imports-test-with-rust-buffer "extern crate serde;\nextern crate tokio;\n\nfn main() {\n    println!(\"Hello\");\n}"
-    (let ((region (hide-imports--get-imports-region)))
-      (should region)
-      (let ((imports-text (buffer-substring (car region) (cdr region))))
-        (should (string-match-p "extern crate serde" imports-text))
-        (should (string-match-p "extern crate tokio" imports-text))
-        (should-not (string-match-p "fn main" imports-text))))))
+  (hide-imports-test-with-min-rows 1
+    (hide-imports-test-with-rust-buffer "extern crate serde;\nextern crate tokio;\n\nfn main() {\n    println!(\"Hello\");\n}"
+      (let ((region (hide-imports--get-imports-region)))
+        (should region)
+        (let ((imports-text (buffer-substring (car region) (cdr region))))
+          (should (string-match-p "extern crate serde" imports-text))
+          (should (string-match-p "extern crate tokio" imports-text))
+          (should-not (string-match-p "fn main" imports-text)))))))
 
 (ert-deftest hide-imports-rust-mode-support ()
   "Test that Rust mode is properly supported."
@@ -644,13 +662,14 @@ print('hello')"
 (ert-deftest hide-imports-elixir-import-with-options ()
   "Test Elixir import with options."
   (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
-  (hide-imports-test-with-elixir-buffer "defmodule MyApp.Helper do\n  import Enum, only: [map: 2, filter: 2]\n  import String, except: [split: 2]\n\n  def process_data(data) do\n    # implementation\n  end\nend"
-    (let ((region (hide-imports--get-imports-region)))
-      (should region)
-      (let ((imports-text (buffer-substring (car region) (cdr region))))
-        (should (string-match-p "import Enum, only: \\[map: 2, filter: 2\\]" imports-text))
-        (should (string-match-p "import String, except: \\[split: 2\\]" imports-text))
-        (should-not (string-match-p "def process_data" imports-text))))))
+  (hide-imports-test-with-min-rows 1
+    (hide-imports-test-with-elixir-buffer "defmodule MyApp.Helper do\n  import Enum, only: [map: 2, filter: 2]\n  import String, except: [split: 2]\n\n  def process_data(data) do\n    # implementation\n  end\nend"
+      (let ((region (hide-imports--get-imports-region)))
+        (should region)
+        (let ((imports-text (buffer-substring (car region) (cdr region))))
+          (should (string-match-p "import Enum, only: \\[map: 2, filter: 2\\]" imports-text))
+          (should (string-match-p "import String, except: \\[split: 2\\]" imports-text))
+          (should-not (string-match-p "def process_data" imports-text)))))))
 
 (ert-deftest hide-imports-elixir-mixed-directives ()
   "Test Elixir mixed import directives."
@@ -690,15 +709,96 @@ print('hello')"
 (ert-deftest hide-imports-elixir-imports-with-function-between ()
   "Test that Elixir only hides the first block of imports, not imports after functions."
   (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
-  (hide-imports-test-with-elixir-buffer "defmodule MyApp.Controller do\n  use Phoenix.Controller\n  alias MyApp.User\n\n  def index(conn, _params) do\n    # function implementation\n  end\n\n  # This import should NOT be hidden\n  import Ecto.Query\n\n  def show(conn, %{\"id\" => id}) do\n    # another function\n  end\nend"
-    (let ((region (hide-imports--get-imports-region)))
-      (should region)
-      (let ((imports-text (buffer-substring (car region) (cdr region))))
-        (should (string-match-p "use Phoenix.Controller" imports-text))
-        (should (string-match-p "alias MyApp.User" imports-text))
-        (should-not (string-match-p "def index" imports-text))
-        (should-not (string-match-p "import Ecto.Query" imports-text))
-        (should-not (string-match-p "def show" imports-text))))))
+  (hide-imports-test-with-min-rows 1
+    (hide-imports-test-with-elixir-buffer "defmodule MyApp.Controller do\n  use Phoenix.Controller\n  alias MyApp.User\n\n  def index(conn, _params) do\n    # function implementation\n  end\n\n  # This import should NOT be hidden\n  import Ecto.Query\n\n  def show(conn, %{\"id\" => id}) do\n    # another function\n  end\nend"
+      (let ((region (hide-imports--get-imports-region)))
+        (should region)
+        (let ((imports-text (buffer-substring (car region) (cdr region))))
+          (should (string-match-p "use Phoenix.Controller" imports-text))
+          (should (string-match-p "alias MyApp.User" imports-text))
+          (should-not (string-match-p "def index" imports-text))
+          (should-not (string-match-p "import Ecto.Query" imports-text))
+          (should-not (string-match-p "def show" imports-text)))))))
+
+(ert-deftest hide-imports-minimum-rows-configuration ()
+  "Test minimum rows configuration."
+  (let ((original-min-rows hide-imports-minimum-rows))
+    (unwind-protect
+        (progn
+          (setq hide-imports-minimum-rows 2)
+          (should (= hide-imports-minimum-rows 2))
+          (setq hide-imports-minimum-rows 5)
+          (should (= hide-imports-minimum-rows 5)))
+      (setq hide-imports-minimum-rows original-min-rows))))
+
+(ert-deftest hide-imports-minimum-rows-python ()
+  "Test minimum rows functionality with Python imports."
+  (let ((original-min-rows hide-imports-minimum-rows))
+    (unwind-protect
+        (progn
+          ;; Test with minimum rows = 3 (default)
+          (setq hide-imports-minimum-rows 3)
+          
+          ;; Short import block (2 lines) should not be hidden
+          (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\nprint('hello')"
+            (when (hide-imports--supported-mode-p)
+              (let ((region (hide-imports--get-imports-region)))
+                (should-not region))))
+          
+          ;; Longer import block (3 lines) should be hidden
+          (hide-imports-test-with-treesit-buffer "import os\nimport sys\nimport json\n\nprint('hello')"
+            (when (hide-imports--supported-mode-p)
+              (let ((region (hide-imports--get-imports-region)))
+                (should region))))
+          
+          ;; Test with minimum rows = 1
+          (setq hide-imports-minimum-rows 1)
+          
+          ;; Even single import should now be hidden
+          (hide-imports-test-with-treesit-buffer "import os\n\nprint('hello')"
+            (when (hide-imports--supported-mode-p)
+              (let ((region (hide-imports--get-imports-region)))
+                (should region)))))
+      (setq hide-imports-minimum-rows original-min-rows))))
+
+(ert-deftest hide-imports-minimum-rows-elixir ()
+  "Test minimum rows functionality with Elixir imports."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
+  (let ((original-min-rows hide-imports-minimum-rows))
+    (unwind-protect
+        (progn
+          ;; Test with minimum rows = 3
+          (setq hide-imports-minimum-rows 3)
+          
+          ;; Short import block (2 lines) should not be hidden
+          (hide-imports-test-with-elixir-buffer "defmodule Test do\n  use GenServer\n  alias MyApp.User\n\n  def start_link do\n    # implementation\n  end\nend"
+            (let ((region (hide-imports--get-imports-region)))
+              (should-not region)))
+          
+          ;; Longer import block (3 lines) should be hidden  
+          (hide-imports-test-with-elixir-buffer "defmodule Test do\n  use GenServer\n  alias MyApp.User\n  import Ecto.Query\n\n  def start_link do\n    # implementation\n  end\nend"
+            (let ((region (hide-imports--get-imports-region)))
+              (should region)))
+          
+          ;; Test with minimum rows = 1
+          (setq hide-imports-minimum-rows 1)
+          
+          ;; Even single import should now be hidden
+          (hide-imports-test-with-elixir-buffer "defmodule Test do\n  use GenServer\n\n  def start_link do\n    # implementation\n  end\nend"
+            (let ((region (hide-imports--get-imports-region)))
+              (should region))))
+      (setq hide-imports-minimum-rows original-min-rows))))
+
+(ert-deftest hide-imports-count-rows-helper ()
+  "Test the row counting helper function."
+  (with-temp-buffer
+    (insert "line 1\nline 2\nline 3\nline 4")
+    (should (= (hide-imports--count-rows 1 7) 1))  ; "line 1" only
+    (should (= (hide-imports--count-rows 1 14) 2)) ; "line 1\nline 2" 
+    (should (= (hide-imports--count-rows 1 21) 3)) ; "line 1\nline 2\nline 3"
+    (should (= (hide-imports--count-rows 8 14) 1)) ; "line 2" only
+    (should (= (hide-imports--count-rows 8 21) 2)) ; "line 2\nline 3"
+    ))
 
 (ert-deftest hide-imports-elixir-mode-support ()
   "Test that Elixir mode is properly supported."
