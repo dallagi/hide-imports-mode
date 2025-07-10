@@ -347,6 +347,35 @@ If WINDOW is nil, remove all overlays."
               (eq (overlay-get overlay 'window) window))
             hide-imports--overlays))
 
+(defun hide-imports--window-has-overlay-for-region-p (window region)
+  "Check if WINDOW has an overlay for the specific REGION."
+  (seq-some (lambda (overlay)
+              (and (eq (overlay-get overlay 'window) window)
+                   (overlay-start overlay) ; Make sure overlay is valid
+                   (overlay-end overlay)
+                   (= (overlay-start overlay) (car region))
+                   (= (overlay-end overlay) (cdr region))))
+            hide-imports--overlays))
+
+(defun hide-imports--remove-overlay-for-region (window region)
+  "Remove overlay for REGION in WINDOW if it exists."
+  (let ((remaining-overlays nil))
+    (dolist (overlay hide-imports--overlays)
+      (if (and (eq (overlay-get overlay 'window) window)
+               (overlay-start overlay) ; Make sure overlay is valid
+               (overlay-end overlay)
+               (= (overlay-start overlay) (car region))
+               (= (overlay-end overlay) (cdr region)))
+          (when (overlay-buffer overlay)
+            (delete-overlay overlay))
+        (push overlay remaining-overlays)))
+    (setq hide-imports--overlays remaining-overlays)))
+
+(defun hide-imports--create-overlay-for-region (window region)
+  "Create overlay for specific REGION in WINDOW."
+  (unless (hide-imports--window-has-overlay-for-region-p window region)
+    (hide-imports--create-overlay (car region) (cdr region) window)))
+
 (defun hide-imports--create-window-overlay (window)
   "Create overlays for WINDOW to hide imports."
   (when (hide-imports--supported-mode-p)
@@ -364,6 +393,18 @@ If WINDOW is nil, use the selected window."
                    (window-point window)
                  (point))))
       (seq-some (lambda (region)
+                  (and (>= pos (car region))
+                       (<= pos (cdr region))))
+                hide-imports--imports-regions))))
+
+(defun hide-imports--get-cursor-region (&optional window)
+  "Get the specific imports region the cursor is currently in for WINDOW.
+Returns nil if cursor is not in any region, or the region as a cons cell (START . END)."
+  (when hide-imports--imports-regions
+    (let ((pos (if window
+                   (window-point window)
+                 (point))))
+      (seq-find (lambda (region)
                   (and (>= pos (car region))
                        (<= pos (cdr region))))
                 hide-imports--imports-regions))))
@@ -419,36 +460,53 @@ If WINDOW is nil, use the selected window."
                              (point))))))))))))
 
 (defun hide-imports--post-command-hook ()
-  "Handle cursor movement for auto-unhide functionality."
+  "Handle cursor movement for auto-unhide functionality with independent region control."
   (when hide-imports-mode
     (let* ((current-window (selected-window))
-           (cursor-in-imports (hide-imports--cursor-in-imports-p))
-           (window-has-overlays (hide-imports--window-has-overlays-p current-window))
-           (previous-cursor-in-imports (hide-imports--get-window-state current-window)))
+           (current-region (hide-imports--get-cursor-region current-window))
+           (previous-region (hide-imports--get-window-state current-window)))
 
       ;; Handle cursor positioning when entering imports region
-      (when (and cursor-in-imports 
-                 window-has-overlays
-                 (not previous-cursor-in-imports)
+      (when (and current-region 
+                 (hide-imports--window-has-overlay-for-region-p current-window current-region)
+                 (not (equal previous-region current-region))
                  hide-imports--imports-regions)
         (hide-imports--position-cursor-in-imports))
-
-      ;; Update window state for current window
-      (hide-imports--set-window-state current-window cursor-in-imports)
 
       ;; Clean up dead windows
       (hide-imports--cleanup-window-states)
 
-      ;; Show/hide imports for the current window only
+      ;; Handle region transitions independently
       (cond
-       (cursor-in-imports
-        ;; Cursor in imports - show imports in this window (remove overlays)
-        (when window-has-overlays
-          (hide-imports--remove-overlays current-window)))
-       ((not cursor-in-imports)
-        ;; Cursor not in imports - hide imports in this window (add overlays)
-        (unless window-has-overlays
-          (hide-imports--create-window-overlay current-window))))
+       ;; Cursor moved into a new region
+       ((and current-region (not (equal current-region previous-region)))
+        ;; Show the current region (remove its overlay)
+        (hide-imports--remove-overlay-for-region current-window current-region)
+        ;; Hide the previous region if we had one and it's different
+        (when (and previous-region (not (equal current-region previous-region)))
+          (hide-imports--create-overlay-for-region current-window previous-region)))
+       
+       ;; Cursor moved out of imports entirely
+       ((and (not current-region) previous-region)
+        ;; Hide the previous region
+        (hide-imports--create-overlay-for-region current-window previous-region))
+       
+       ;; Cursor moved into imports from outside - ensure all other regions are hidden
+       ((and current-region (not previous-region))
+        ;; Show the current region
+        (hide-imports--remove-overlay-for-region current-window current-region)
+        ;; Ensure all other regions are hidden
+        (dolist (region hide-imports--imports-regions)
+          (unless (equal region current-region)
+            (hide-imports--create-overlay-for-region current-window region))))
+       
+       ;; Cursor is outside imports and no previous state - ensure all regions are hidden
+       ((and (not current-region) (not previous-region) hide-imports--imports-regions)
+        (dolist (region hide-imports--imports-regions)
+          (hide-imports--create-overlay-for-region current-window region))))
+
+      ;; Update window state for current window (now stores the region, not just boolean)
+      (hide-imports--set-window-state current-window current-region)
       
       ;; Update last cursor position for next command
       (setq hide-imports--last-cursor-position (point)))))

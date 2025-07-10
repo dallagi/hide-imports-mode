@@ -1001,6 +1001,108 @@ print('hello')"
           (should-not (string-match-p "def my_function" region-text))
           (should-not (string-match-p "Some logic" region-text)))))))
 
+;;; Independent Region Unhiding Tests
+
+(ert-deftest hide-imports-independent-region-unhiding ()
+  "Test that import regions are shown/hidden independently."
+  (hide-imports-test-with-min-rows 1
+    (let ((hide-imports-hide-all-blocks t))
+      (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\ndef func1():\n    pass\n\nimport json\nimport re\n\ndef func2():\n    pass"
+        (when (hide-imports--supported-mode-p)
+          (let ((regions (hide-imports--get-imports-regions)))
+            (should regions)
+            (should (= (length regions) 2))
+            
+            ;; Enable hide-imports-mode
+            (hide-imports-mode 1)
+            
+            ;; Move cursor outside imports first to ensure overlays are created
+            (goto-char (point-max))
+            (hide-imports--post-command-hook)
+            
+            ;; Initially, both regions should be hidden (cursor not in imports)
+            (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
+            (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 1 regions)))
+            
+            ;; Move cursor to first region
+            (goto-char (car (nth 0 regions)))
+            (hide-imports--post-command-hook)
+            
+            ;; First region should be shown, second should remain hidden
+            (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
+            (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 1 regions)))
+            
+            ;; Move cursor to second region
+            (goto-char (car (nth 1 regions)))
+            (hide-imports--post-command-hook)
+            
+            ;; First region should be hidden again, second should be shown
+            (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
+            (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 1 regions)))
+            
+            ;; Move cursor outside imports
+            (goto-char (point-max))
+            (hide-imports--post-command-hook)
+            
+            ;; Both regions should be hidden again
+            (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
+            (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 1 regions)))))))))
+
+(ert-deftest hide-imports-region-specific-cursor-detection ()
+  "Test that cursor region detection works correctly."
+  (hide-imports-test-with-min-rows 1
+    (let ((hide-imports-hide-all-blocks t))
+      (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\ndef func1():\n    pass\n\nimport json\nimport re\n\ndef func2():\n    pass"
+        (when (hide-imports--supported-mode-p)
+          (let ((regions (hide-imports--get-imports-regions)))
+            (should regions)
+            (should (= (length regions) 2))
+            
+            ;; Set the regions variable for cursor detection
+            (setq hide-imports--imports-regions regions)
+            
+            ;; Test cursor outside imports
+            (goto-char (point-max))
+            (should-not (hide-imports--get-cursor-region))
+            
+            ;; Test cursor in first region
+            (goto-char (car (nth 0 regions)))
+            (should (equal (hide-imports--get-cursor-region) (nth 0 regions)))
+            
+            ;; Test cursor in second region
+            (goto-char (car (nth 1 regions)))
+            (should (equal (hide-imports--get-cursor-region) (nth 1 regions)))
+            
+            ;; Test cursor between regions
+            (goto-char (+ (cdr (nth 0 regions)) 5))
+            (should-not (hide-imports--get-cursor-region))))))))
+
+(ert-deftest hide-imports-overlay-management-per-region ()
+  "Test overlay creation and removal for specific regions."
+  (hide-imports-test-with-min-rows 1
+    (let ((hide-imports-hide-all-blocks t))
+      (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\ndef func1():\n    pass\n\nimport json\nimport re\n\ndef func2():\n    pass"
+        (when (hide-imports--supported-mode-p)
+          (let ((regions (hide-imports--get-imports-regions))
+                (window (selected-window)))
+            (should regions)
+            (should (= (length regions) 2))
+            
+            ;; Create overlay for first region only
+            (hide-imports--create-overlay-for-region window (nth 0 regions))
+            (should (hide-imports--window-has-overlay-for-region-p window (nth 0 regions)))
+            (should-not (hide-imports--window-has-overlay-for-region-p window (nth 1 regions)))
+            
+            ;; Create overlay for second region
+            (hide-imports--create-overlay-for-region window (nth 1 regions))
+            (should (hide-imports--window-has-overlay-for-region-p window (nth 0 regions)))
+            (should (hide-imports--window-has-overlay-for-region-p window (nth 1 regions)))
+            
+            ;; Remove overlay for first region only
+            (hide-imports--remove-overlay-for-region window (nth 0 regions))
+            (should-not (hide-imports--window-has-overlay-for-region-p window (nth 0 regions)))
+            (should (hide-imports--window-has-overlay-for-region-p window (nth 1 regions)))))))))
+
 (provide 'test-hide-imports-mode)
 
 ;;; test-hide-imports-mode.el ends here
