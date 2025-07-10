@@ -48,10 +48,8 @@
     (should-not hide-imports-mode)
     (hide-imports-mode 1)
     (should hide-imports-mode)
-    (should (member '(hide-imports . t) buffer-invisibility-spec))
     (hide-imports-mode -1)
-    (should-not hide-imports-mode)
-    (should-not (member '(hide-imports . t) buffer-invisibility-spec))))
+    (should-not hide-imports-mode)))
 
 (ert-deftest hide-imports-mode-python-mode-check ()
   "Test that mode only works in Python buffers."
@@ -116,11 +114,9 @@
         (when region
           (let ((overlay (hide-imports--create-overlay (car region) (cdr region))))
             (should overlay)
-            (should (overlay-get overlay 'invisible))
-            (should (eq (overlay-get overlay 'invisible) 'hide-imports))
+            (should (overlay-get overlay 'display))
             (should (overlay-get overlay 'hide-imports))
-            (should (overlay-get overlay 'before-string))
-            (should (string= (overlay-get overlay 'before-string) 
+            (should (string= (overlay-get overlay 'display) 
                            (propertize hide-imports-replacement-text 
                                      'face 'font-lock-comment-face)))
             (should (member overlay hide-imports--overlays))))))))
