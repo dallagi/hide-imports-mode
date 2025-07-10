@@ -5,6 +5,7 @@
 ## Features
 
 - Hides import statements in supported major modes:
+    - Elixir
     - Python
     - Rust
 - Automatically shows imports when your cursor is within the import region.
