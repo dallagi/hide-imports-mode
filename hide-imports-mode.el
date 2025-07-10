@@ -4,7 +4,7 @@
 
 ;; Author: Your Name <your.email@example.com>
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "29.1"))
+;; Package-Requires: ((emacs "30.1"))
 ;; Keywords: convenience, tools
 ;; URL: https://github.com/youruser/hide-imports-mode
 
