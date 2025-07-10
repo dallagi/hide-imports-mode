@@ -38,7 +38,7 @@
   :group 'convenience
   :prefix "hide-imports-")
 
-(defcustom hide-imports-replacement-text "Imports"
+(defcustom hide-imports-replacement-text "Imports..."
   "Text to display when imports are hidden."
   :type 'string
   :group 'hide-imports)
@@ -126,8 +126,7 @@
   "Create an overlay to hide imports from START to END, visible only in WINDOW.
 If WINDOW is nil, the overlay is visible in all windows."
   (let ((overlay (make-overlay start end)))
-    (overlay-put overlay 'invisible 'hide-imports)
-    (overlay-put overlay 'before-string
+    (overlay-put overlay 'display
                  (propertize hide-imports-replacement-text
                              'face 'font-lock-comment-face))
     (overlay-put overlay 'hide-imports t)
@@ -257,13 +256,11 @@ If WINDOW is nil, use the selected window."
             map)
   (if hide-imports-mode
       (progn
-        (add-to-invisibility-spec '(hide-imports . t))
         (setq hide-imports--cursor-in-imports nil)
         (hide-imports--hide-imports)
         (add-hook 'after-change-functions 'hide-imports--after-change nil t)
         (add-hook 'post-command-hook 'hide-imports--post-command-hook nil t))
     (progn
-      (remove-from-invisibility-spec '(hide-imports . t))
       (hide-imports--show-imports)
       (setq hide-imports--imports-region nil)
       (setq hide-imports--cursor-in-imports nil)
