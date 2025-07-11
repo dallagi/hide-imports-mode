@@ -9,6 +9,8 @@
     - Python
     - Rust
 - Automatically shows imports when your cursor is within the import region.
+- Configurable auto-hide timer that hides imports after a delay when cursor exits the region.
+- Independent timers for multiple import blocks - each region hides after its own delay.
 - Provides a toggle function to manually show/hide imports.
 
 ## Installation
@@ -55,7 +57,26 @@ Using `use-package` and `:vc`:
 ### Toggling Imports
 
 -   Use `M-x hide-imports-toggle` or the keybinding `C-c C-i` (if enabled) to manually show or hide imports.
--   Imports will automatically reappear when your cursor enters the hidden import region and hide again when you move out.
+-   Imports will automatically reappear when your cursor enters the hidden import region.
+-   When you move the cursor out of an import region, it will remain visible for the configured delay period before automatically hiding.
+-   Multiple import regions can have independent timers - you can quickly scroll through all import blocks to reveal them, and each will hide after its own delay.
+
+### Auto-Hide Timer Behavior
+
+The auto-hide timer provides a more natural editing experience by giving you time to read or work with imports before they disappear:
+
+- **Per-region timers**: Each import block has its own independent timer
+- **Timer activation**: When you move the cursor out of an import region, a timer starts for that specific region
+- **Timer cancellation**: Moving the cursor back into a region cancels only that region's timer
+- **Multiple concurrent timers**: You can quickly scroll through multiple import blocks to reveal them all, and each will hide after its own delay
+- **Movement outside imports**: Moving the cursor between different positions outside import regions does not cancel existing timers
+- **Configurable delay**: The delay is fully customizable and can be disabled entirely
+
+#### Usage Examples:
+
+1. **Quick review**: Navigate to imports, read them for 1 second, then move away - they'll hide automatically
+2. **Fast browsing**: Quickly scroll through all import blocks to see what's imported, then continue coding - all blocks will hide after their individual delays
+3. **Focused editing**: When working in import regions, move between them freely without premature hiding
 
 ## Configuration
 
@@ -78,6 +99,17 @@ Using `use-package` and `:vc`:
 
     ;; Hide only the first import block (default behavior)
     (setq hide-imports-hide-all-blocks nil)
+    ```
+-   `hide-imports-auto-hide-delay`: Delay in seconds before automatically hiding imports when cursor exits the region (default: 1.0). Set to 0 to disable auto-hide functionality and return to immediate hiding.
+    ```emacs-lisp
+    ;; Hide imports after 2 seconds
+    (setq hide-imports-auto-hide-delay 2.0)
+    
+    ;; Disable auto-hide timer (immediate hiding)
+    (setq hide-imports-auto-hide-delay 0)
+    
+    ;; Very short delay for quick coding
+    (setq hide-imports-auto-hide-delay 0.5)
     ```
 -   `hide-imports-global-modes`: A list of major modes where `hide-imports-global-mode` should activate `hide-imports-mode`.
     ```emacs-lisp
