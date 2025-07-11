@@ -61,6 +61,12 @@ Each contiguous block of imports/comments must meet the minimum-rows threshold t
   :type 'boolean
   :group 'hide-imports)
 
+(defcustom hide-imports-auto-hide-delay 1.0
+  "Delay in seconds before automatically hiding imports when cursor exits the region.
+Set to 0 to disable auto-hide functionality."
+  :type 'number
+  :group 'hide-imports)
+
 (defvar hide-imports--overlays nil
   "List of overlays created by hide-imports-mode.")
 
@@ -76,6 +82,9 @@ Each element is a cons cell (START . END).")
 
 (defvar-local hide-imports--last-cursor-position nil
   "Last cursor position to detect movement direction.")
+
+(defvar-local hide-imports--auto-hide-timers nil
+  "Alist of (REGION . TIMER) for auto-hiding imports when cursor exits region.")
 
 (defvar hide-imports--language-configs
   '((python . ((modes . (python-ts-mode python-mode))
@@ -459,12 +468,50 @@ Returns nil if cursor is not in any region, or the region as a cons cell (START 
                              (beginning-of-line)
                              (point))))))))))))
 
+(defun hide-imports--auto-hide-region (window region)
+  "Auto-hide REGION in WINDOW after delay."
+  (when (and hide-imports-mode 
+             (> hide-imports-auto-hide-delay 0)
+             (not (hide-imports--cursor-in-imports-p window)))
+    (hide-imports--create-overlay-for-region window region))
+  ;; Clean up the timer entry
+  (setq hide-imports--auto-hide-timers
+        (delq (assoc region hide-imports--auto-hide-timers)
+              hide-imports--auto-hide-timers)))
+
+(defun hide-imports--cancel-auto-hide-timer (region)
+  "Cancel the auto-hide timer for REGION if it exists."
+  (when-let ((timer-entry (assoc region hide-imports--auto-hide-timers)))
+    (cancel-timer (cdr timer-entry))
+    (setq hide-imports--auto-hide-timers
+          (delq timer-entry hide-imports--auto-hide-timers))))
+
+(defun hide-imports--cancel-all-auto-hide-timers ()
+  "Cancel all auto-hide timers."
+  (dolist (timer-entry hide-imports--auto-hide-timers)
+    (cancel-timer (cdr timer-entry)))
+  (setq hide-imports--auto-hide-timers nil))
+
+(defun hide-imports--schedule-auto-hide (window region)
+  "Schedule auto-hide of REGION in WINDOW after the configured delay."
+  (when (and hide-imports-mode (> hide-imports-auto-hide-delay 0))
+    ;; Cancel existing timer for this region
+    (hide-imports--cancel-auto-hide-timer region)
+    ;; Schedule new timer
+    (let ((timer (run-with-timer hide-imports-auto-hide-delay nil
+                                 #'hide-imports--auto-hide-region window region)))
+      (push (cons region timer) hide-imports--auto-hide-timers))))
+
 (defun hide-imports--post-command-hook ()
   "Handle cursor movement for auto-unhide functionality with independent region control."
   (when hide-imports-mode
     (let* ((current-window (selected-window))
            (current-region (hide-imports--get-cursor-region current-window))
            (previous-region (hide-imports--get-window-state current-window)))
+
+      ;; Cancel auto-hide timer only for the region cursor moved into
+      (when current-region
+        (hide-imports--cancel-auto-hide-timer current-region))
 
       ;; Handle cursor positioning when entering imports region
       (when (and current-region 
@@ -482,14 +529,18 @@ Returns nil if cursor is not in any region, or the region as a cons cell (START 
        ((and current-region (not (equal current-region previous-region)))
         ;; Show the current region (remove its overlay)
         (hide-imports--remove-overlay-for-region current-window current-region)
-        ;; Hide the previous region if we had one and it's different
+        ;; Schedule auto-hide for the previous region if we had one and it's different
         (when (and previous-region (not (equal current-region previous-region)))
-          (hide-imports--create-overlay-for-region current-window previous-region)))
+          (if (> hide-imports-auto-hide-delay 0)
+              (hide-imports--schedule-auto-hide current-window previous-region)
+            (hide-imports--create-overlay-for-region current-window previous-region))))
        
        ;; Cursor moved out of imports entirely
        ((and (not current-region) previous-region)
-        ;; Hide the previous region
-        (hide-imports--create-overlay-for-region current-window previous-region))
+        ;; Schedule auto-hide for the previous region or hide immediately if delay is 0
+        (if (> hide-imports-auto-hide-delay 0)
+            (hide-imports--schedule-auto-hide current-window previous-region)
+          (hide-imports--create-overlay-for-region current-window previous-region)))
        
        ;; Cursor moved into imports from outside - ensure all other regions are hidden
        ((and current-region (not previous-region))
@@ -501,7 +552,9 @@ Returns nil if cursor is not in any region, or the region as a cons cell (START 
             (hide-imports--create-overlay-for-region current-window region))))
        
        ;; Cursor is outside imports and no previous state - ensure all regions are hidden
-       ((and (not current-region) (not previous-region) hide-imports--imports-regions)
+       ;; But only if there are no pending auto-hide timers
+       ((and (not current-region) (not previous-region) hide-imports--imports-regions
+             (null hide-imports--auto-hide-timers))
         (dolist (region hide-imports--imports-regions)
           (hide-imports--create-overlay-for-region current-window region))))
 
@@ -517,12 +570,14 @@ Returns nil if cursor is not in any region, or the region as a cons cell (START 
     (let ((regions (hide-imports--get-imports-regions)))
       (when regions
         (setq hide-imports--imports-regions regions)
-        ;; Create overlays for all windows showing this buffer where cursor is not in imports
+        ;; Create overlays for all windows showing this buffer
         (dolist (window (window-list))
           (when (eq (window-buffer window) (current-buffer))
-            (unless (hide-imports--cursor-in-imports-p window)
+            (let ((current-region (hide-imports--get-cursor-region window)))
               (dolist (region regions)
-                (hide-imports--create-overlay (car region) (cdr region) window)))))))))
+                ;; Hide all regions except the one where cursor is located
+                (unless (equal region current-region)
+                  (hide-imports--create-overlay (car region) (cdr region) window))))))))))
 
 (defun hide-imports--show-imports ()
   "Show imports in the current buffer for all windows."
@@ -540,14 +595,22 @@ Returns nil if cursor is not in any region, or the region as a cons cell (START 
       (progn
         (setq hide-imports--cursor-in-imports nil)
         (setq hide-imports--last-cursor-position (point))
+        (setq hide-imports--auto-hide-timers nil)
         (hide-imports--hide-imports)
+        ;; Initialize window state to current cursor region
+        (let ((current-window (selected-window)))
+          (when hide-imports--imports-regions
+            (hide-imports--set-window-state current-window 
+                                          (hide-imports--get-cursor-region current-window))))
         (add-hook 'after-change-functions 'hide-imports--after-change nil t)
         (add-hook 'post-command-hook 'hide-imports--post-command-hook nil t))
     (progn
+      (hide-imports--cancel-all-auto-hide-timers)
       (hide-imports--show-imports)
       (setq hide-imports--imports-regions nil)
       (setq hide-imports--cursor-in-imports nil)
       (setq hide-imports--last-cursor-position nil)
+      (setq hide-imports--auto-hide-timers nil)
       ;; Clean up window states for this buffer
       (setq hide-imports--window-states
             (seq-filter (lambda (entry)

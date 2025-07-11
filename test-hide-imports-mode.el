@@ -1001,12 +1001,160 @@ print('hello')"
           (should-not (string-match-p "def my_function" region-text))
           (should-not (string-match-p "Some logic" region-text)))))))
 
+;;; Auto-hide Timer Tests
+
+(ert-deftest hide-imports-auto-hide-timer ()
+  "Test that imports auto-hide after the configured delay."
+  (hide-imports-test-with-min-rows 1
+    (let ((hide-imports-auto-hide-delay 0.1)) ;; Very short delay for testing
+      (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\ndef func():\n    pass"
+        (when (hide-imports--supported-mode-p)
+          (let ((regions (hide-imports--get-imports-regions)))
+            (should regions)
+            (should (= (length regions) 1))
+            
+            ;; Enable hide-imports-mode
+            (hide-imports-mode 1)
+            
+            ;; Move cursor to imports
+            (goto-char (car (nth 0 regions)))
+            (hide-imports--post-command-hook)
+            
+            ;; Imports should be visible (no overlay)
+            (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
+            
+            ;; Move cursor outside imports
+            (goto-char (point-max))
+            (hide-imports--post-command-hook)
+            
+            ;; Should not be hidden immediately (timer is scheduled)
+            (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
+            
+            ;; Wait for timer to fire
+            (sleep-for 0.2)
+            
+            ;; Now imports should be hidden
+            (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))))))))
+
+(ert-deftest hide-imports-auto-hide-disabled ()
+  "Test that auto-hide is disabled when delay is 0."
+  (hide-imports-test-with-min-rows 1
+    (let ((hide-imports-auto-hide-delay 0)) ;; Disabled
+      (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\ndef func():\n    pass"
+        (when (hide-imports--supported-mode-p)
+          (let ((regions (hide-imports--get-imports-regions)))
+            (should regions)
+            (should (= (length regions) 1))
+            
+            ;; Enable hide-imports-mode
+            (hide-imports-mode 1)
+            
+            ;; Move cursor to imports
+            (goto-char (car (nth 0 regions)))
+            (hide-imports--post-command-hook)
+            
+            ;; Imports should be visible
+            (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
+            
+            ;; Move cursor outside imports
+            (goto-char (point-max))
+            (hide-imports--post-command-hook)
+            
+            ;; Should be hidden immediately since delay is 0
+            (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))))))))
+
+(ert-deftest hide-imports-auto-hide-not-canceled-by-movement-outside ()
+  "Test that moving cursor outside imports doesn't cancel the auto-hide timer."
+  (hide-imports-test-with-min-rows 1
+    (let ((hide-imports-auto-hide-delay 0.1)) ;; Short delay for testing
+      (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\ndef func():\n    pass\n\ndef other():\n    pass"
+        (when (hide-imports--supported-mode-p)
+          (let ((regions (hide-imports--get-imports-regions)))
+            (should regions)
+            (should (= (length regions) 1))
+            
+            ;; Enable hide-imports-mode
+            (hide-imports-mode 1)
+            
+            ;; Move cursor to imports
+            (goto-char (car (nth 0 regions)))
+            (hide-imports--post-command-hook)
+            
+            ;; Imports should be visible
+            (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
+            
+            ;; Move cursor outside imports to start timer
+            (goto-char (point-max))
+            (hide-imports--post-command-hook)
+            
+            ;; Should not be hidden immediately (timer is scheduled)
+            (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
+            
+            ;; Move cursor to another position outside imports (should not cancel timer)
+            (goto-char (- (point-max) 5))
+            (hide-imports--post-command-hook)
+            
+            ;; Should still not be hidden immediately
+            (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
+            
+            ;; Wait for timer to fire
+            (sleep-for 0.2)
+            
+            ;; Now imports should be hidden (timer wasn't canceled by movement outside)
+            (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))))))))
+
+(ert-deftest hide-imports-multiple-regions-independent-timers ()
+  "Test that multiple regions can have independent auto-hide timers."
+  (hide-imports-test-with-min-rows 1
+    (let ((hide-imports-auto-hide-delay 0.1)
+          (hide-imports-hide-all-blocks t)) ;; Enable multiple regions
+      (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\ndef func1():\n    pass\n\nimport json\nimport re\n\ndef func2():\n    pass"
+        (when (hide-imports--supported-mode-p)
+          (let ((regions (hide-imports--get-imports-regions)))
+            (should regions)
+            (should (= (length regions) 2))
+            
+            ;; Enable hide-imports-mode
+            (hide-imports-mode 1)
+            
+            ;; Move cursor to first region
+            (goto-char (car (nth 0 regions)))
+            (hide-imports--post-command-hook)
+            
+            ;; First region should be visible, second hidden
+            (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
+            (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 1 regions)))
+            
+            ;; Move cursor to second region 
+            (goto-char (car (nth 1 regions)))
+            (hide-imports--post-command-hook)
+            
+            ;; First region should be scheduled for auto-hide, second should be visible
+            (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
+            (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 1 regions)))
+            
+            ;; Move cursor outside all regions
+            (goto-char (point-max))
+            (hide-imports--post-command-hook)
+            
+            ;; Both regions should still be visible (timers are running)
+            (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
+            (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 1 regions)))
+            
+            ;; Wait for timers to fire
+            (sleep-for 0.2)
+            
+            ;; Now both regions should be hidden (independent timers fired)
+            (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
+            (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 1 regions)))))))))
+
 ;;; Independent Region Unhiding Tests
 
 (ert-deftest hide-imports-independent-region-unhiding ()
   "Test that import regions are shown/hidden independently."
   (hide-imports-test-with-min-rows 1
-    (let ((hide-imports-hide-all-blocks t))
+    (let ((hide-imports-hide-all-blocks t)
+          (hide-imports-auto-hide-delay 0)) ;; Disable auto-hide timer for this test
       (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\ndef func1():\n    pass\n\nimport json\nimport re\n\ndef func2():\n    pass"
         (when (hide-imports--supported-mode-p)
           (let ((regions (hide-imports--get-imports-regions)))
