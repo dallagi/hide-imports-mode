@@ -1249,6 +1249,82 @@ print('hello')"
             (should-not (hide-imports--window-has-overlay-for-region-p window (nth 0 regions)))
             (should (hide-imports--window-has-overlay-for-region-p window (nth 1 regions)))))))))
 
+;;; JavaScript Language Tests
+
+(defmacro hide-imports-test-with-javascript-buffer (content &rest body)
+  "Create a temporary buffer with CONTENT for JavaScript testing and execute BODY."
+  `(let ((temp-buffer (generate-new-buffer " *temp*" t)))
+     (save-current-buffer
+       (set-buffer temp-buffer)
+       (unwind-protect
+           (progn
+             (set-window-buffer (selected-window) (current-buffer))
+             (insert ,content)
+             (let ((inhibit-message t))
+               (if (and (treesit-available-p) (treesit-language-available-p 'javascript))
+                   (progn
+                     (setq major-mode 'js-ts-mode)
+                     (treesit-parser-create 'javascript))
+                 (setq major-mode 'js-ts-mode))
+               (goto-char (point-min))
+               ,@body))
+         (kill-buffer temp-buffer)))))
+
+(ert-deftest hide-imports-javascript-basic-imports ()
+  "Test basic JavaScript import detection."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'javascript)))
+  (hide-imports-test-with-javascript-buffer "import React from 'react';\nimport { useState, useEffect } from 'react';\nimport axios from 'axios';\n\nfunction App() {\n  return <div>Hello</div>;\n}"
+    (let ((region (hide-imports--get-imports-region)))
+      (should region)
+      (let ((imports-text (buffer-substring (car region) (cdr region))))
+        (should (string-match-p "import React from 'react'" imports-text))
+        (should (string-match-p "import { useState, useEffect }" imports-text))
+        (should (string-match-p "import axios from 'axios'" imports-text))))))
+
+(ert-deftest hide-imports-javascript-mode-support ()
+  "Test that JavaScript mode is properly supported."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'javascript)))
+  (hide-imports-test-with-javascript-buffer "import fs from 'fs';\n\nconsole.log('test');"
+    (should (hide-imports--supported-mode-p))))
+
+;;; TypeScript Language Tests
+
+(defmacro hide-imports-test-with-typescript-buffer (content &rest body)
+  "Create a temporary buffer with CONTENT for TypeScript testing and execute BODY."
+  `(let ((temp-buffer (generate-new-buffer " *temp*" t)))
+     (save-current-buffer
+       (set-buffer temp-buffer)
+       (unwind-protect
+           (progn
+             (set-window-buffer (selected-window) (current-buffer))
+             (insert ,content)
+             (let ((inhibit-message t))
+               (if (and (treesit-available-p) (treesit-language-available-p 'typescript))
+                   (progn
+                     (setq major-mode 'typescript-ts-mode)
+                     (treesit-parser-create 'typescript))
+                 (setq major-mode 'typescript-ts-mode))
+               (goto-char (point-min))
+               ,@body))
+         (kill-buffer temp-buffer)))))
+
+(ert-deftest hide-imports-typescript-basic-imports ()
+  "Test basic TypeScript import detection."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'typescript)))
+  (hide-imports-test-with-typescript-buffer "import { Component } from '@angular/core';\nimport { HttpClient } from '@angular/common/http';\nimport { Observable } from 'rxjs';\n\n@Component({\n  selector: 'app-test'\n})\nclass TestComponent {}"
+    (let ((region (hide-imports--get-imports-region)))
+      (should region)
+      (let ((imports-text (buffer-substring (car region) (cdr region))))
+        (should (string-match-p "import { Component }" imports-text))
+        (should (string-match-p "import { HttpClient }" imports-text))
+        (should (string-match-p "import { Observable }" imports-text))))))
+
+(ert-deftest hide-imports-typescript-mode-support ()
+  "Test that TypeScript mode is properly supported."
+  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'typescript)))
+  (hide-imports-test-with-typescript-buffer "import * as fs from 'fs';\n\nconsole.log('test');"
+    (should (hide-imports--supported-mode-p))))
+
 (provide 'test-hide-imports-mode)
 
 ;;; test-hide-imports-mode.el ends here

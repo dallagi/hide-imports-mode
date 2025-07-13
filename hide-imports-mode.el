@@ -46,7 +46,7 @@ It should return a string to display in place of the hidden imports."
   :group 'hide-imports)
 
 (defcustom hide-imports-global-modes
-  '(python-mode python-ts-mode rust-mode rust-ts-mode rustic-mode elixir-mode elixir-ts-mode)
+  '(python-mode python-ts-mode rust-mode rust-ts-mode rustic-mode elixir-mode elixir-ts-mode js-mode js-ts-mode javascript-mode typescript-mode typescript-ts-mode tsx-ts-mode)
   "List of major modes where hide-imports-global-mode should be enabled."
   :type '(repeat (symbol :tag "Major mode"))
   :group 'hide-imports)
@@ -104,7 +104,13 @@ Each element is a cons cell (START . END).")
              (import-types . ("use_declaration" "extern_crate_declaration"))))
     (elixir . ((modes . (elixir-ts-mode elixir-mode))
                (language . elixir)
-               (import-types . ("call")))))
+               (import-types . ("call"))))
+    (javascript . ((modes . (js-mode js-ts-mode javascript-mode))
+                   (language . javascript)
+                   (import-types . ("import_statement"))))
+    (typescript . ((modes . (typescript-mode typescript-ts-mode tsx-ts-mode))
+                   (language . typescript)
+                   (import-types . ("import_statement")))))
   "Configuration for different languages.")
 
 (defun hide-imports--get-language-config ()
