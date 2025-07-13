@@ -22,19 +22,10 @@ jobs:
         version: ${{ matrix.emacs-version }}
 
     - name: Run tests
-      run: emacs --batch -l ./run-tests.el
+      run: make test
 
     - name: Check byte compilation
-      run: emacs --batch -f batch-byte-compile hide-imports-mode.el
+      run: make byte-compile
 
     - name: Check package lint
-      run: |
-        emacs --batch \
-          --eval "(require 'package)" \
-          --eval "(add-to-list 'package-archives '(\"melpa\" . \"https://melpa.org/packages/\"))" \
-          --eval "(package-initialize)" \
-          --eval "(package-refresh-contents)" \
-          --eval "(package-install 'package-lint)" \
-          --eval "(require 'package-lint)" \
-          --eval "(package-lint-batch-and-exit)" \
-          hide-imports-mode.el
+      run: make lint
