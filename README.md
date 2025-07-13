@@ -13,7 +13,7 @@
 
 ## Demo
 
-![hide-imports-mode demo](demo.gif)
+![hide-imports-mode demo](demo.svg)
 
 
 ## Installation
