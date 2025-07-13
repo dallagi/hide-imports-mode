@@ -10,7 +10,6 @@
     - Rust
 - Automatically shows imports when your cursor is within the import region.
 - Configurable auto-hide timer that hides imports after a delay when cursor exits the region.
-- Independent timers for multiple import blocks - each region hides after its own delay.
 
 ## Demo
 
