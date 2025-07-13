@@ -21,6 +21,17 @@ jobs:
       with:
         version: ${{ matrix.emacs-version }}
 
+    - name: Install tree-sitter grammars
+      run: |
+        emacs --batch --eval "
+        (progn
+          (setq treesit-language-source-alist
+                '((python \"https://github.com/tree-sitter/tree-sitter-python\")
+                  (rust \"https://github.com/tree-sitter/tree-sitter-rust\")
+                  (elixir \"https://github.com/elixir-lang/tree-sitter-elixir\")))
+          (mapc #'treesit-install-language-grammar
+                (mapcar #'car treesit-language-source-alist)))"
+
     - name: Run tests
       run: make test
 
