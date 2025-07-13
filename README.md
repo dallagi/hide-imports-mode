@@ -1,7 +1,8 @@
-# hide-imports-mode
-
 <div align="center">
-<em>A minor mode for Emacs that helps reduce visual clutter by hiding import statements in your code.</em>
+  <h1 style="width: 100%; text-align: center">hide-imports-mode</h1>
+  <p style="font-size: 18px; white-space: pre-line">
+    A minor mode for Emacs that helps reduce visual clutter by hiding import statements in your code.
+  </p>
 </div>
 
 ## Table of Contents
