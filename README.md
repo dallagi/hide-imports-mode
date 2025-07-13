@@ -5,10 +5,11 @@
   </p>
 </div>
 
+![hide-imports-mode demo](demo.svg)
+
 ## Table of Contents
 
 - [Features](#features)
-- [Demo](#demo)
 - [Installation](#installation)
   - [Manual Installation](#manual-installation)
   - [Using a Package Manager](#using-a-package-manager)
@@ -28,9 +29,6 @@
 - Automatically shows imports when your cursor is within the import region.
 - Configurable auto-hide timer that hides imports after a delay when cursor exits the region.
 
-## Demo
-
-![hide-imports-mode demo](demo.svg)
 
 
 ## Installation
