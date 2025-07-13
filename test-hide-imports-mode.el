@@ -179,12 +179,12 @@
       (let ((region (hide-imports--get-imports-region)))
         (when region
           (setq hide-imports--imports-regions (list region))
-          
+
           ;; Move cursor to imports region
           (goto-char (car region))
           (hide-imports--post-command-hook)
           (should-not hide-imports--overlays)
-          
+
           ;; Move cursor away from imports
           (goto-char (cdr region))
           (forward-char 10)
@@ -443,12 +443,12 @@ print('hello')"
       (let ((region (hide-imports--get-imports-region)))
         (when region
           (setq hide-imports--imports-regions (list region))
-          
+
           ;; Create a fake window entry
           (let ((fake-window (make-symbol "fake-window")))
             (hide-imports--set-window-state fake-window t)
             (should (hide-imports--get-window-state fake-window))
-            
+
             ;; Cleanup should remove the fake window
             (hide-imports--cleanup-window-states)
             (should-not (alist-get fake-window hide-imports--window-states))))))))
@@ -462,17 +462,17 @@ print('hello')"
         (when region
           (setq hide-imports--imports-regions (list region))
           (hide-imports-mode 1)
-          
+
           ;; Start with cursor outside imports (should hide)
           (goto-char (+ (cdr region) 10))
           (hide-imports--post-command-hook)
           (should (hide-imports--window-has-overlays-p (selected-window)))
-          
+
           ;; Move cursor to imports (should show for this window)
           (goto-char (car region))
           (hide-imports--post-command-hook)
           (should-not (hide-imports--window-has-overlays-p (selected-window)))
-          
+
           ;; Move cursor back outside (should hide again)
           (goto-char (+ (cdr region) 10))
           (hide-imports--post-command-hook)
@@ -489,14 +489,14 @@ print('hello')"
         ;; Set some window state
         (hide-imports--set-window-state window1 t)
         (should (hide-imports--get-window-state window1))
-        
+
         ;; Disable mode should clean up window states for this buffer
         (hide-imports-mode -1)
-        
+
         ;; The window state should be cleaned up for this buffer
         ;; The cleanup removes entries where window shows current buffer
         ;; Since window1 is still showing test-buffer, it should be removed
-        (should-not (seq-find (lambda (entry) 
+        (should-not (seq-find (lambda (entry)
                                 (and (eq (car entry) window1)
                                      (eq (window-buffer (car entry)) test-buffer)))
                               hide-imports--window-states))))))
@@ -741,22 +741,22 @@ print('hello')"
         (progn
           ;; Test with minimum rows = 3 (default)
           (setq hide-imports-minimum-rows 3)
-          
+
           ;; Short import block (2 lines) should not be hidden
           (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\nprint('hello')"
             (when (hide-imports--supported-mode-p)
               (let ((region (hide-imports--get-imports-region)))
                 (should-not region))))
-          
+
           ;; Longer import block (3 lines) should be hidden
           (hide-imports-test-with-treesit-buffer "import os\nimport sys\nimport json\n\nprint('hello')"
             (when (hide-imports--supported-mode-p)
               (let ((region (hide-imports--get-imports-region)))
                 (should region))))
-          
+
           ;; Test with minimum rows = 1
           (setq hide-imports-minimum-rows 1)
-          
+
           ;; Even single import should now be hidden
           (hide-imports-test-with-treesit-buffer "import os\n\nprint('hello')"
             (when (hide-imports--supported-mode-p)
@@ -772,20 +772,20 @@ print('hello')"
         (progn
           ;; Test with minimum rows = 3
           (setq hide-imports-minimum-rows 3)
-          
+
           ;; Short import block (2 lines) should not be hidden
           (hide-imports-test-with-elixir-buffer "defmodule Test do\n  use GenServer\n  alias MyApp.User\n\n  def start_link do\n    # implementation\n  end\nend"
             (let ((region (hide-imports--get-imports-region)))
               (should-not region)))
-          
-          ;; Longer import block (3 lines) should be hidden  
+
+          ;; Longer import block (3 lines) should be hidden
           (hide-imports-test-with-elixir-buffer "defmodule Test do\n  use GenServer\n  alias MyApp.User\n  import Ecto.Query\n\n  def start_link do\n    # implementation\n  end\nend"
             (let ((region (hide-imports--get-imports-region)))
               (should region)))
-          
+
           ;; Test with minimum rows = 1
           (setq hide-imports-minimum-rows 1)
-          
+
           ;; Even single import should now be hidden
           (hide-imports-test-with-elixir-buffer "defmodule Test do\n  use GenServer\n\n  def start_link do\n    # implementation\n  end\nend"
             (let ((region (hide-imports--get-imports-region)))
@@ -797,7 +797,7 @@ print('hello')"
   (with-temp-buffer
     (insert "line 1\nline 2\nline 3\nline 4")
     (should (= (hide-imports--count-rows 1 7) 1))  ; "line 1" only
-    (should (= (hide-imports--count-rows 1 14) 2)) ; "line 1\nline 2" 
+    (should (= (hide-imports--count-rows 1 14) 2)) ; "line 1\nline 2"
     (should (= (hide-imports--count-rows 1 21) 3)) ; "line 1\nline 2\nline 3"
     (should (= (hide-imports--count-rows 8 14) 1)) ; "line 2" only
     (should (= (hide-imports--count-rows 8 21) 2)) ; "line 2\nline 3"
@@ -879,7 +879,7 @@ print('hello')"
           (let ((first-block-text (buffer-substring (caar regions) (cdar regions))))
             (should (string-match-p "import Foo" first-block-text))
             (should (string-match-p "import Bar" first-block-text)))
-          ;; Second block: import Baz, import Qux  
+          ;; Second block: import Baz, import Qux
           (let ((second-block-text (buffer-substring (car (nth 1 regions)) (cdr (nth 1 regions)))))
             (should (string-match-p "import Baz" second-block-text))
             (should (string-match-p "import Qux" second-block-text))))))))
@@ -1010,27 +1010,27 @@ print('hello')"
           (let ((regions (hide-imports--get-imports-regions)))
             (should regions)
             (should (= (length regions) 1))
-            
+
             ;; Enable hide-imports-mode
             (hide-imports-mode 1)
-            
+
             ;; Move cursor to imports
             (goto-char (car (nth 0 regions)))
             (hide-imports--post-command-hook)
-            
+
             ;; Imports should be visible (no overlay)
             (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
-            
+
             ;; Move cursor outside imports
             (goto-char (point-max))
             (hide-imports--post-command-hook)
-            
+
             ;; Should not be hidden immediately (timer is scheduled)
             (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
-            
+
             ;; Wait for timer to fire
             (sleep-for 0.2)
-            
+
             ;; Now imports should be hidden
             (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))))))))
 
@@ -1043,21 +1043,21 @@ print('hello')"
           (let ((regions (hide-imports--get-imports-regions)))
             (should regions)
             (should (= (length regions) 1))
-            
+
             ;; Enable hide-imports-mode
             (hide-imports-mode 1)
-            
+
             ;; Move cursor to imports
             (goto-char (car (nth 0 regions)))
             (hide-imports--post-command-hook)
-            
+
             ;; Imports should be visible
             (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
-            
+
             ;; Move cursor outside imports
             (goto-char (point-max))
             (hide-imports--post-command-hook)
-            
+
             ;; Should be hidden immediately since delay is 0
             (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))))))))
 
@@ -1070,34 +1070,34 @@ print('hello')"
           (let ((regions (hide-imports--get-imports-regions)))
             (should regions)
             (should (= (length regions) 1))
-            
+
             ;; Enable hide-imports-mode
             (hide-imports-mode 1)
-            
+
             ;; Move cursor to imports
             (goto-char (car (nth 0 regions)))
             (hide-imports--post-command-hook)
-            
+
             ;; Imports should be visible
             (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
-            
+
             ;; Move cursor outside imports to start timer
             (goto-char (point-max))
             (hide-imports--post-command-hook)
-            
+
             ;; Should not be hidden immediately (timer is scheduled)
             (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
-            
+
             ;; Move cursor to another position outside imports (should not cancel timer)
             (goto-char (- (point-max) 5))
             (hide-imports--post-command-hook)
-            
+
             ;; Should still not be hidden immediately
             (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
-            
+
             ;; Wait for timer to fire
             (sleep-for 0.2)
-            
+
             ;; Now imports should be hidden (timer wasn't canceled by movement outside)
             (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))))))))
 
@@ -1111,37 +1111,37 @@ print('hello')"
           (let ((regions (hide-imports--get-imports-regions)))
             (should regions)
             (should (= (length regions) 2))
-            
+
             ;; Enable hide-imports-mode
             (hide-imports-mode 1)
-            
+
             ;; Move cursor to first region
             (goto-char (car (nth 0 regions)))
             (hide-imports--post-command-hook)
-            
+
             ;; First region should be visible, second hidden
             (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
             (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 1 regions)))
-            
-            ;; Move cursor to second region 
+
+            ;; Move cursor to second region
             (goto-char (car (nth 1 regions)))
             (hide-imports--post-command-hook)
-            
+
             ;; First region should be scheduled for auto-hide, second should be visible
             (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
             (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 1 regions)))
-            
+
             ;; Move cursor outside all regions
             (goto-char (point-max))
             (hide-imports--post-command-hook)
-            
+
             ;; Both regions should still be visible (timers are running)
             (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
             (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 1 regions)))
-            
+
             ;; Wait for timers to fire
             (sleep-for 0.2)
-            
+
             ;; Now both regions should be hidden (independent timers fired)
             (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
             (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 1 regions)))))))))
@@ -1158,38 +1158,38 @@ print('hello')"
           (let ((regions (hide-imports--get-imports-regions)))
             (should regions)
             (should (= (length regions) 2))
-            
+
             ;; Enable hide-imports-mode
             (hide-imports-mode 1)
-            
+
             ;; Move cursor outside imports first to ensure overlays are created
             (goto-char (point-max))
             (hide-imports--post-command-hook)
-            
+
             ;; Initially, both regions should be hidden (cursor not in imports)
             (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
             (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 1 regions)))
-            
+
             ;; Move cursor to first region
             (goto-char (car (nth 0 regions)))
             (hide-imports--post-command-hook)
-            
+
             ;; First region should be shown, second should remain hidden
             (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
             (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 1 regions)))
-            
+
             ;; Move cursor to second region
             (goto-char (car (nth 1 regions)))
             (hide-imports--post-command-hook)
-            
+
             ;; First region should be hidden again, second should be shown
             (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
             (should-not (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 1 regions)))
-            
+
             ;; Move cursor outside imports
             (goto-char (point-max))
             (hide-imports--post-command-hook)
-            
+
             ;; Both regions should be hidden again
             (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 0 regions)))
             (should (hide-imports--window-has-overlay-for-region-p (selected-window) (nth 1 regions)))))))))
@@ -1203,22 +1203,22 @@ print('hello')"
           (let ((regions (hide-imports--get-imports-regions)))
             (should regions)
             (should (= (length regions) 2))
-            
+
             ;; Set the regions variable for cursor detection
             (setq hide-imports--imports-regions regions)
-            
+
             ;; Test cursor outside imports
             (goto-char (point-max))
             (should-not (hide-imports--get-cursor-region))
-            
+
             ;; Test cursor in first region
             (goto-char (car (nth 0 regions)))
             (should (equal (hide-imports--get-cursor-region) (nth 0 regions)))
-            
+
             ;; Test cursor in second region
             (goto-char (car (nth 1 regions)))
             (should (equal (hide-imports--get-cursor-region) (nth 1 regions)))
-            
+
             ;; Test cursor between regions
             (goto-char (+ (cdr (nth 0 regions)) 5))
             (should-not (hide-imports--get-cursor-region))))))))
@@ -1233,17 +1233,17 @@ print('hello')"
                 (window (selected-window)))
             (should regions)
             (should (= (length regions) 2))
-            
+
             ;; Create overlay for first region only
             (hide-imports--create-overlay-for-region window (nth 0 regions))
             (should (hide-imports--window-has-overlay-for-region-p window (nth 0 regions)))
             (should-not (hide-imports--window-has-overlay-for-region-p window (nth 1 regions)))
-            
+
             ;; Create overlay for second region
             (hide-imports--create-overlay-for-region window (nth 1 regions))
             (should (hide-imports--window-has-overlay-for-region-p window (nth 0 regions)))
             (should (hide-imports--window-has-overlay-for-region-p window (nth 1 regions)))
-            
+
             ;; Remove overlay for first region only
             (hide-imports--remove-overlay-for-region window (nth 0 regions))
             (should-not (hide-imports--window-has-overlay-for-region-p window (nth 0 regions)))

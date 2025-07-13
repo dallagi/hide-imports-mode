@@ -180,8 +180,8 @@ Returns nil if no regions are found, or the first region as a cons cell."
 START and END are the positions of the hidden region.
 Returns a string like '[123 hidden import lines]'."
   (let ((line-count (count-lines start end)))
-    (format "[%d hidden import line%s]" 
-            line-count 
+    (format "[%d hidden import line%s]"
+            line-count
             (if (= line-count 1) "" "s"))))
 
 (defun hide-imports--collect-import-nodes (node language import-types)
@@ -193,7 +193,7 @@ Returns a string like '[123 hidden import lines]'."
         (push node import-nodes))
       ;; Recursively check all children
       (dolist (child (treesit-node-children node))
-        (setq import-nodes (append import-nodes 
+        (setq import-nodes (append import-nodes
                                    (hide-imports--collect-import-nodes child language import-types)))))
     import-nodes))
 
@@ -205,8 +205,8 @@ Returns a string like '[123 hidden import lines]'."
       ;; Collect all import nodes from the entire tree
       (let ((import-nodes (hide-imports--collect-import-nodes root language import-types)))
         ;; Sort import nodes by position
-        (setq import-nodes (sort import-nodes (lambda (a b) 
-                                                (< (treesit-node-start a) 
+        (setq import-nodes (sort import-nodes (lambda (a b)
+                                                (< (treesit-node-start a)
                                                    (treesit-node-start b)))))
         ;; Group contiguous imports into regions, including comments
         (when import-nodes
@@ -284,8 +284,8 @@ import blocks while the user is editing (syntax may be temporarily broken)."
       ;; Collect all import nodes from the entire tree
       (let ((import-nodes (hide-imports--collect-elixir-import-nodes root)))
         ;; Sort import nodes by position
-        (setq import-nodes (sort import-nodes (lambda (a b) 
-                                                (< (treesit-node-start a) 
+        (setq import-nodes (sort import-nodes (lambda (a b)
+                                                (< (treesit-node-start a)
                                                    (treesit-node-start b)))))
         ;; Group contiguous imports into regions
         (when import-nodes
@@ -318,7 +318,7 @@ import blocks while the user is editing (syntax may be temporarily broken)."
         (push node import-nodes))
       ;; Recursively check all children
       (dolist (child (treesit-node-children node))
-        (setq import-nodes (append import-nodes 
+        (setq import-nodes (append import-nodes
                                    (hide-imports--collect-elixir-import-nodes child)))))
     import-nodes))
 
@@ -459,7 +459,7 @@ Returns nil if cursor is not in any region, or the region as a cons cell (START 
 
 (defun hide-imports--auto-hide-region (window region)
   "Auto-hide REGION in WINDOW after delay."
-  (when (and hide-imports-mode 
+  (when (and hide-imports-mode
              (> hide-imports-auto-hide-delay 0)
              (not (hide-imports--cursor-in-imports-p window)))
     (hide-imports--create-overlay-for-region window region))
@@ -503,7 +503,7 @@ Returns nil if cursor is not in any region, or the region as a cons cell (START 
         (hide-imports--cancel-auto-hide-timer current-region))
 
       ;; Handle cursor positioning when entering imports region
-      (when (and current-region 
+      (when (and current-region
                  (hide-imports--window-has-overlay-for-region-p current-window current-region)
                  (not (equal previous-region current-region))
                  hide-imports--imports-regions)
@@ -585,7 +585,7 @@ Returns nil if cursor is not in any region, or the region as a cons cell (START 
         ;; Initialize window state to current cursor region
         (let ((current-window (selected-window)))
           (when hide-imports--imports-regions
-            (hide-imports--set-window-state current-window 
+            (hide-imports--set-window-state current-window
                                             (hide-imports--get-cursor-region current-window))))
         (add-hook 'after-change-functions 'hide-imports--after-change nil t)
         (add-hook 'post-command-hook 'hide-imports--post-command-hook nil t))

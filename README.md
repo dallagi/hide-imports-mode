@@ -84,7 +84,7 @@ The auto-hide timer provides a more natural editing experience by giving you tim
             (format "<%d imports>" (count-lines start end))))
 
     ;; Use static text
-    (setq hide-imports-overlay-text-function 
+    (setq hide-imports-overlay-text-function
           (lambda (start end) "Imports..."))
     ```
 -   `hide-imports-minimum-rows`: Minimum number of rows required to hide imports (default: 3). If the import region contains fewer rows than this value, imports will remain visible.
