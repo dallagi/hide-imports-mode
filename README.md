@@ -104,14 +104,22 @@ The auto-hide timer provides a more natural editing experience by giving you tim
     ```emacs-lisp
     ;; Hide imports after 2 seconds
     (setq hide-imports-auto-hide-delay 2.0)
-    
+
     ;; Disable auto-hide timer (immediate hiding)
     (setq hide-imports-auto-hide-delay 0)
-    
+
     ;; Very short delay for quick coding
     (setq hide-imports-auto-hide-delay 0.5)
     ```
 -   `hide-imports-global-modes`: A list of major modes where `hide-imports-global-mode` should activate `hide-imports-mode`.
     ```emacs-lisp
     (setq hide-imports-global-modes '(python-mode python-ts-mode rust-mode))
+    ```
+-   `hide-imports-refresh-delay`: Delay in seconds before refreshing import regions after buffer changes (default: 0.5). This prevents constant recalculation while typing. Set to 0 for immediate refresh.
+    ```emacs-lisp
+    ;; Refresh after 1 second of inactivity
+    (setq hide-imports-refresh-delay 1.0)
+
+    ;; Immediate refresh (may impact performance)
+    (setq hide-imports-refresh-delay 0)
     ```
