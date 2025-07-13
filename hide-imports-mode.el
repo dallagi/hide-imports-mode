@@ -243,18 +243,24 @@ Returns nil if no regions are found, or the first region as a cons cell."
 
 (defun hide-imports--imports-are-contiguous-p (prev-end current-start language)
   "Check if imports at PREV-END and CURRENT-START are contiguous.
-Allows for comments and whitespace between them."
+Allows for comments and whitespace between them.
+Also treats the line containing the cursor as valid to avoid splitting
+import blocks while the user is editing (syntax may be temporarily broken)."
   (let ((text-between (buffer-substring-no-properties prev-end current-start))
-        (contiguous t))
+        (contiguous t)
+        (cursor-line-num (line-number-at-pos (point)))
+        (start-line-num (line-number-at-pos prev-end)))
     (with-temp-buffer
       (insert text-between)
       (goto-char (point-min))
       (while (and contiguous (not (eobp)))
-        (let ((line (buffer-substring-no-properties (line-beginning-position) (line-end-position))))
-          ;; A line is OK if it's empty/whitespace OR it's a comment.
+        (let ((line (buffer-substring-no-properties (line-beginning-position) (line-end-position)))
+              (current-line-num (+ start-line-num (1- (line-number-at-pos)))))
+          ;; A line is OK if it's empty/whitespace OR it's a comment OR it contains the cursor.
           (unless (or (string-match-p "^[ \t]*$" line)
                       (string-match-p "^[ \t]*#" line)
-                      (string-match-p "^[ \t]*//" line))
+                      (string-match-p "^[ \t]*//" line)
+                      (= current-line-num cursor-line-num))
             (setq contiguous nil)))
         (forward-line 1)))
     contiguous))
