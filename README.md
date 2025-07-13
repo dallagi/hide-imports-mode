@@ -1,6 +1,8 @@
 # hide-imports-mode
 
-`hide-imports-mode` is a minor mode for Emacs that helps reduce visual clutter by hiding import statements in your code.
+<div align="center">
+<em>A minor mode for Emacs that helps reduce visual clutter by hiding import statements in your code.</em>
+</div>
 
 ## Table of Contents
 
