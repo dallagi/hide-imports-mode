@@ -2,6 +2,18 @@
 
 `hide-imports-mode` is a minor mode for Emacs that helps reduce visual clutter by hiding import statements in your code.
 
+## Table of Contents
+
+- [Features](#features)
+- [Demo](#demo)
+- [Installation](#installation)
+  - [Manual Installation](#manual-installation)
+  - [Using a Package Manager](#using-a-package-manager)
+- [Usage](#usage)
+  - [Enabling the Mode](#enabling-the-mode)
+  - [Auto-Hide Timer Behavior](#auto-hide-timer-behavior)
+- [Configuration](#configuration)
+
 ## Features
 
 - Hides import statements in supported major modes:
