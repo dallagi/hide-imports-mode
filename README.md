@@ -13,6 +13,11 @@
 - Independent timers for multiple import blocks - each region hides after its own delay.
 - Provides a toggle function to manually show/hide imports.
 
+## Demo
+
+![hide-imports-mode demo](demo.gif)
+
+
 ## Installation
 
 ### Manual Installation
@@ -36,10 +41,6 @@ Using `use-package` and `:vc`:
   :config
   (hide-imports-global-mode 1))
 ```
-
-## Demo
-
-![hide-imports-mode demo](demo.gif)
 
 ## Usage
 
