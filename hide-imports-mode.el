@@ -2,11 +2,11 @@
 
 ;; Copyright (C) 2025
 
-;; Author: Your Name <your.email@example.com>
+;; Author: Marco Dallagiacoma
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "30.1"))
 ;; Keywords: convenience, tools
-;; URL: https://github.com/youruser/hide-imports-mode
+;; URL: https://github.com/dallagi/hide-imports-mode
 
 ;; This file is not part of GNU Emacs.
 
@@ -192,7 +192,7 @@ Returns nil if no regions are found, or the first region as a cons cell."
       ;; Recursively check all children
       (dolist (child (treesit-node-children node))
         (setq import-nodes (append import-nodes 
-                                  (hide-imports--collect-import-nodes child language import-types)))))
+                                   (hide-imports--collect-import-nodes child language import-types)))))
     import-nodes))
 
 (defun hide-imports--get-all-standard-imports-regions (language import-types)
@@ -204,8 +204,8 @@ Returns nil if no regions are found, or the first region as a cons cell."
       (let ((import-nodes (hide-imports--collect-import-nodes root language import-types)))
         ;; Sort import nodes by position
         (setq import-nodes (sort import-nodes (lambda (a b) 
-                                               (< (treesit-node-start a) 
-                                                  (treesit-node-start b)))))
+                                                (< (treesit-node-start a) 
+                                                   (treesit-node-start b)))))
         ;; Group contiguous imports into regions, including comments
         (when import-nodes
           (let ((current-start (treesit-node-start (car import-nodes)))
@@ -283,8 +283,8 @@ import blocks while the user is editing (syntax may be temporarily broken)."
       (let ((import-nodes (hide-imports--collect-elixir-import-nodes root)))
         ;; Sort import nodes by position
         (setq import-nodes (sort import-nodes (lambda (a b) 
-                                               (< (treesit-node-start a) 
-                                                  (treesit-node-start b)))))
+                                                (< (treesit-node-start a) 
+                                                   (treesit-node-start b)))))
         ;; Group contiguous imports into regions
         (when import-nodes
           (let ((current-start (treesit-node-start (car import-nodes)))
@@ -317,7 +317,7 @@ import blocks while the user is editing (syntax may be temporarily broken)."
       ;; Recursively check all children
       (dolist (child (treesit-node-children node))
         (setq import-nodes (append import-nodes 
-                                  (hide-imports--collect-elixir-import-nodes child)))))
+                                   (hide-imports--collect-elixir-import-nodes child)))))
     import-nodes))
 
 (defun hide-imports--create-overlay (start end &optional window)
@@ -608,7 +608,7 @@ Returns nil if cursor is not in any region, or the region as a cons cell (START 
         (let ((current-window (selected-window)))
           (when hide-imports--imports-regions
             (hide-imports--set-window-state current-window 
-                                          (hide-imports--get-cursor-region current-window))))
+                                            (hide-imports--get-cursor-region current-window))))
         (add-hook 'after-change-functions 'hide-imports--after-change nil t)
         (add-hook 'post-command-hook 'hide-imports--post-command-hook nil t))
     (progn
@@ -671,7 +671,7 @@ Returns nil if cursor is not in any region, or the region as a cons cell (START 
                  (dolist (window (get-buffer-window-list buffer nil t))
                    (with-selected-window window
                      (hide-imports--set-window-state window
-                                                   (hide-imports--get-cursor-region window)))))))
+                                                     (hide-imports--get-cursor-region window)))))))
            (current-buffer)))))
 
 (defun hide-imports--maybe-turn-on ()
