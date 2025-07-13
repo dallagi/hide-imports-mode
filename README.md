@@ -57,20 +57,7 @@ Using `use-package` and `:vc`:
 
 ### Auto-Hide Timer Behavior
 
-The auto-hide timer provides a more natural editing experience by giving you time to read or work with imports before they disappear:
-
-- **Per-region timers**: Each import block has its own independent timer
-- **Timer activation**: When you move the cursor out of an import region, a timer starts for that specific region
-- **Timer cancellation**: Moving the cursor back into a region cancels only that region's timer
-- **Multiple concurrent timers**: You can quickly scroll through multiple import blocks to reveal them all, and each will hide after its own delay
-- **Movement outside imports**: Moving the cursor between different positions outside import regions does not cancel existing timers
-- **Configurable delay**: The delay is fully customizable and can be disabled entirely
-
-#### Usage Examples:
-
-1. **Quick review**: Navigate to imports, read them for 1 second, then move away - they'll hide automatically
-2. **Fast browsing**: Quickly scroll through all import blocks to see what's imported, then continue coding - all blocks will hide after their individual delays
-3. **Focused editing**: When working in import regions, move between them freely without premature hiding
+When you move the cursor away from import regions, they automatically hide after a configurable delay. Each import block has its own independent timer that starts when you leave that region.
 
 ## Configuration
 
