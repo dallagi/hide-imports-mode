@@ -284,7 +284,6 @@
 
 (ert-deftest hide-imports-global-mode-python-auto-enable ()
   "Test that global mode automatically enables hide-imports-mode in Python buffers."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'python)))
   (let ((original-global-modes hide-imports-global-modes))
     (unwind-protect
         (progn
@@ -305,7 +304,6 @@
 
 (ert-deftest hide-imports-global-mode-rust-auto-enable ()
   "Test that global mode automatically enables hide-imports-mode in Rust buffers."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'rust)))
   (let ((original-global-modes hide-imports-global-modes))
     (unwind-protect
         (progn
@@ -340,7 +338,6 @@
 
 (ert-deftest hide-imports-global-mode-excluded-mode ()
   "Test that global mode doesn't activate in modes not in the list."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'python)))
   (let ((original-global-modes hide-imports-global-modes))
     (unwind-protect
         (progn
@@ -365,7 +362,6 @@
 
 (ert-deftest hide-imports-maybe-turn-on-function ()
   "Test the hide-imports--maybe-turn-on function directly."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'python)))
   (let ((original-global-modes hide-imports-global-modes))
     (unwind-protect
         (progn
@@ -378,7 +374,6 @@
 
 (ert-deftest hide-imports-maybe-turn-on-already-active ()
   "Test that hide-imports--maybe-turn-on doesn't activate if already active."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'python)))
   (let ((original-global-modes hide-imports-global-modes))
     (unwind-protect
         (progn
@@ -395,7 +390,6 @@
 
 (ert-deftest hide-imports-multi-window-cursor-tracking ()
   "Test cursor tracking across multiple windows showing the same buffer."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'python)))
   (hide-imports-test-with-treesit-buffer "import os
 import sys
 
@@ -421,7 +415,6 @@ print('hello')"
 
 (ert-deftest hide-imports-multi-window-any-cursor-check ()
   "Test the any-window-in-imports-p function."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'python)))
   (hide-imports-test-with-treesit-buffer "import os\nsys\n\nprint('hello')"
     (when (hide-imports--supported-mode-p)
       (hide-imports-mode 1)
@@ -437,7 +430,6 @@ print('hello')"
 
 (ert-deftest hide-imports-window-state-cleanup ()
   "Test cleanup of window states for dead windows."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'python)))
   (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\nprint('hello')"
     (when (hide-imports--supported-mode-p)
       (let ((region (hide-imports--get-imports-region)))
@@ -455,7 +447,6 @@ print('hello')"
 
 (ert-deftest hide-imports-multi-window-overlay-management ()
   "Test that overlays are managed correctly across multiple windows."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'python)))
   (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\nprint('hello')"
     (when (hide-imports--supported-mode-p)
       (let ((region (hide-imports--get-imports-region)))
@@ -480,7 +471,6 @@ print('hello')"
 
 (ert-deftest hide-imports-buffer-local-window-cleanup ()
   "Test that window states are cleaned up when mode is disabled."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'python)))
   (hide-imports-test-with-treesit-buffer "import os\nimport sys\n\nprint('hello')"
     (when (hide-imports--supported-mode-p)
       (hide-imports-mode 1)
@@ -519,7 +509,6 @@ print('hello')"
 
 (ert-deftest hide-imports-rust-basic-imports ()
   "Test basic Rust import detection."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'rust)))
   (hide-imports-test-with-rust-buffer "use std::collections::HashMap;\nuse std::fs;\nextern crate serde;\n\nfn main() {\n    println!(\"Hello\");\n}"
     (let ((region (hide-imports--get-imports-region)))
       (should region)
@@ -531,7 +520,6 @@ print('hello')"
 
 (ert-deftest hide-imports-rust-complex-use-declarations ()
   "Test Rust imports with complex use declarations and paths."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'rust)))
   (hide-imports-test-with-rust-buffer "use std::collections::{HashMap, HashSet};\nuse std::io::{self, Read, Write};\nuse crate::module::*;\nuse super::parent_module::Item;\n\nfn main() {\n    println!(\"Hello\");\n}"
     (let ((region (hide-imports--get-imports-region)))
       (should region)
@@ -544,7 +532,6 @@ print('hello')"
 
 (ert-deftest hide-imports-rust-mixed-import-types ()
   "Test Rust imports mixing use declarations and extern crate."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'rust)))
   (hide-imports-test-with-rust-buffer "extern crate serde;\nextern crate tokio;\nuse serde::{Serialize, Deserialize};\nuse tokio::runtime::Runtime;\n\nfn main() {\n    println!(\"Hello\");\n}"
     (let ((region (hide-imports--get-imports-region)))
       (should region)
@@ -557,7 +544,6 @@ print('hello')"
 
 (ert-deftest hide-imports-rust-with-comments ()
   "Test Rust imports with comments within and after imports."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'rust)))
   (hide-imports-test-with-rust-buffer "use std::collections::HashMap;\n// Comment within imports\nuse std::fs;\n\n// Comment after imports\nfn main() {\n    println!(\"Hello\");\n}"
     (let ((region (hide-imports--get-imports-region)))
       (should region)
@@ -569,7 +555,6 @@ print('hello')"
 
 (ert-deftest hide-imports-rust-comments-between-imports ()
   "Test Rust imports with multiple comments interspersed."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'rust)))
   (hide-imports-test-with-rust-buffer "use std::collections::HashMap;\n// First comment within imports\nuse std::fs;\n// Second comment within imports\nuse std::io;\n\n// Comment after imports - should NOT be hidden\nfn main() {\n    println!(\"Hello\");\n}"
     (let ((region (hide-imports--get-imports-region)))
       (should region)
@@ -581,7 +566,6 @@ print('hello')"
 
 (ert-deftest hide-imports-rust-single-use-declaration ()
   "Test Rust with only a single use declaration."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'rust)))
   (hide-imports-test-with-min-rows 1
     (hide-imports-test-with-rust-buffer "use std::collections::HashMap;\n\nfn main() {\n    let map = HashMap::new();\n}"
       (let ((region (hide-imports--get-imports-region)))
@@ -592,7 +576,6 @@ print('hello')"
 
 (ert-deftest hide-imports-rust-extern-crate-only ()
   "Test Rust with only extern crate declarations."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'rust)))
   (hide-imports-test-with-min-rows 1
     (hide-imports-test-with-rust-buffer "extern crate serde;\nextern crate tokio;\n\nfn main() {\n    println!(\"Hello\");\n}"
       (let ((region (hide-imports--get-imports-region)))
@@ -604,7 +587,6 @@ print('hello')"
 
 (ert-deftest hide-imports-rust-mode-support ()
   "Test that Rust mode is properly supported."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'rust)))
   (hide-imports-test-with-rust-buffer "use std::collections::HashMap;"
     (should (hide-imports--supported-mode-p))
     (let ((config (hide-imports--get-language-config)))
@@ -616,7 +598,6 @@ print('hello')"
 
 (ert-deftest hide-imports-rust-no-imports ()
   "Test Rust behavior when there are no imports."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'rust)))
   (hide-imports-test-with-rust-buffer "fn main() {\n    println!(\"Hello world\");\n}\n\nstruct MyStruct {\n    field: i32,\n}"
     (let ((region (hide-imports--get-imports-region)))
       (should-not region))))
@@ -639,7 +620,6 @@ print('hello')"
 
 (ert-deftest hide-imports-elixir-basic-imports ()
   "Test basic Elixir import detection."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
   (hide-imports-test-with-elixir-buffer "defmodule MyApp.User do\n  use Ecto.Schema\n  alias MyApp.{Repo, Auth}\n  import Ecto.Query\n  require Logger\n\n  def create_user(attrs) do\n    # implementation\n  end\nend"
     (let ((region (hide-imports--get-imports-region)))
       (should region)
@@ -652,7 +632,6 @@ print('hello')"
 
 (ert-deftest hide-imports-elixir-alias-variations ()
   "Test Elixir alias variations."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
   (hide-imports-test-with-elixir-buffer "defmodule MyApp.Controller do\n  alias MyApp.User\n  alias MyApp.Authentication.Guardian, as: Auth\n  alias MyApp.{Post, Comment}\n\n  def index do\n    # implementation\n  end\nend"
     (let ((region (hide-imports--get-imports-region)))
       (should region)
@@ -664,7 +643,6 @@ print('hello')"
 
 (ert-deftest hide-imports-elixir-import-with-options ()
   "Test Elixir import with options."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
   (hide-imports-test-with-min-rows 1
     (hide-imports-test-with-elixir-buffer "defmodule MyApp.Helper do\n  import Enum, only: [map: 2, filter: 2]\n  import String, except: [split: 2]\n\n  def process_data(data) do\n    # implementation\n  end\nend"
       (let ((region (hide-imports--get-imports-region)))
@@ -676,7 +654,6 @@ print('hello')"
 
 (ert-deftest hide-imports-elixir-mixed-directives ()
   "Test Elixir mixed import directives."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
   (hide-imports-test-with-elixir-buffer "defmodule MyApp.Worker do\n  use GenServer\n  alias MyApp.{Cache, Database}\n  import MyApp.Helpers\n  require Logger\n\n  def start_link(opts) do\n    GenServer.start_link(__MODULE__, opts)\n  end\nend"
     (let ((region (hide-imports--get-imports-region)))
       (should region)
@@ -689,7 +666,6 @@ print('hello')"
 
 (ert-deftest hide-imports-elixir-with-comments ()
   "Test Elixir imports with comments."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
   (hide-imports-test-with-elixir-buffer "defmodule MyApp.Controller do\n  use Phoenix.Controller\n  # Authentication modules\n  alias MyApp.Auth\n  # Database modules\n  alias MyApp.Repo\n\n  # This comment is after imports\n  def index(conn, _params) do\n    # implementation\n  end\nend"
     (let ((region (hide-imports--get-imports-region)))
       (should region)
@@ -704,14 +680,12 @@ print('hello')"
 
 (ert-deftest hide-imports-elixir-no-imports ()
   "Test Elixir behavior when there are no imports."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
   (hide-imports-test-with-elixir-buffer "defmodule MyApp.Utils do\n  def format_string(str) do\n    String.upcase(str)\n  end\n\n  def calculate(x, y) do\n    x + y\n  end\nend"
     (let ((region (hide-imports--get-imports-region)))
       (should-not region))))
 
 (ert-deftest hide-imports-elixir-imports-with-function-between ()
   "Test that Elixir only hides the first block of imports, not imports after functions."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
   (hide-imports-test-with-min-rows 1
     (hide-imports-test-with-elixir-buffer "defmodule MyApp.Controller do\n  use Phoenix.Controller\n  alias MyApp.User\n\n  def index(conn, _params) do\n    # function implementation\n  end\n\n  # This import should NOT be hidden\n  import Ecto.Query\n\n  def show(conn, %{\"id\" => id}) do\n    # another function\n  end\nend"
       (let ((region (hide-imports--get-imports-region)))
@@ -766,7 +740,6 @@ print('hello')"
 
 (ert-deftest hide-imports-minimum-rows-elixir ()
   "Test minimum rows functionality with Elixir imports."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
   (let ((original-min-rows hide-imports-minimum-rows))
     (unwind-protect
         (progn
@@ -805,7 +778,6 @@ print('hello')"
 
 (ert-deftest hide-imports-elixir-mode-support ()
   "Test that Elixir mode is properly supported."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
   (hide-imports-test-with-elixir-buffer "defmodule Test do\n  alias MyApp.User\nend"
     (should (hide-imports--supported-mode-p))
     (let ((config (hide-imports--get-language-config)))
@@ -868,7 +840,6 @@ print('hello')"
 
 (ert-deftest hide-imports-hide-all-blocks-elixir ()
   "Test hiding all import blocks in Elixir when hide-imports-hide-all-blocks is enabled."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
   (hide-imports-test-with-min-rows 1
     (let ((hide-imports-hide-all-blocks t))
       (hide-imports-test-with-elixir-buffer "defmodule MyModule do\n  import Foo\n  import Bar\n\n  def some_function do\n    :ok\n  end\n\n  import Baz\n  import Qux\n\n  def another_function do\n    :ok\n  end\nend"
@@ -886,7 +857,6 @@ print('hello')"
 
 (ert-deftest hide-imports-elixir-multiple-import-blocks-updated ()
   "Test that Elixir gets all blocks when hide-all-blocks is enabled, only first when disabled."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
   (hide-imports-test-with-min-rows 1
     ;; Test with hide-all-blocks disabled (should only get first block)
     (let ((hide-imports-hide-all-blocks nil))
@@ -987,7 +957,6 @@ print('hello')"
 
 (ert-deftest hide-imports-elixir-nested-in-function ()
   "Test Elixir imports nested within a function."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'elixir)))
   (hide-imports-test-with-min-rows 1
     (hide-imports-test-with-elixir-buffer "defmodule MyModule do\n  def my_function do\n    alias MyApp.Helper\n    import Ecto.Query\n    # Some logic here\n    :ok\n  end\nend"
       (let ((regions (hide-imports--get-imports-regions)))
@@ -1272,7 +1241,6 @@ print('hello')"
 
 (ert-deftest hide-imports-javascript-basic-imports ()
   "Test basic JavaScript import detection."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'javascript)))
   (hide-imports-test-with-javascript-buffer "import React from 'react';\nimport { useState, useEffect } from 'react';\nimport axios from 'axios';\n\nfunction App() {\n  return <div>Hello</div>;\n}"
     (let ((region (hide-imports--get-imports-region)))
       (should region)
@@ -1283,7 +1251,6 @@ print('hello')"
 
 (ert-deftest hide-imports-javascript-mode-support ()
   "Test that JavaScript mode is properly supported."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'javascript)))
   (hide-imports-test-with-javascript-buffer "import fs from 'fs';\n\nconsole.log('test');"
     (should (hide-imports--supported-mode-p))))
 
@@ -1310,7 +1277,6 @@ print('hello')"
 
 (ert-deftest hide-imports-typescript-basic-imports ()
   "Test basic TypeScript import detection."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'typescript)))
   (hide-imports-test-with-typescript-buffer "import { Component } from '@angular/core';\nimport { HttpClient } from '@angular/common/http';\nimport { Observable } from 'rxjs';\n\n@Component({\n  selector: 'app-test'\n})\nclass TestComponent {}"
     (let ((region (hide-imports--get-imports-region)))
       (should region)
@@ -1321,7 +1287,6 @@ print('hello')"
 
 (ert-deftest hide-imports-typescript-mode-support ()
   "Test that TypeScript mode is properly supported."
-  (skip-unless (and (treesit-available-p) (treesit-language-available-p 'typescript)))
   (hide-imports-test-with-typescript-buffer "import * as fs from 'fs';\n\nconsole.log('test');"
     (should (hide-imports--supported-mode-p))))
 
