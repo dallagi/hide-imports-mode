@@ -577,9 +577,6 @@ Returns nil if cursor is not in any region, or the region as a cons cell (START 
   "Minor mode to hide import statements in code."
   :lighter " HideImports"
   :group 'hide-imports
-  :keymap (let ((map (make-sparse-keymap)))
-            (define-key map (kbd "C-c C-i") 'hide-imports-toggle)
-            map)
   (if hide-imports-mode
       (progn
         (setq hide-imports--last-cursor-position (point))
@@ -612,13 +609,6 @@ Returns nil if cursor is not in any region, or the region as a cons cell (START 
       (remove-hook 'after-change-functions 'hide-imports--after-change t)
       (remove-hook 'post-command-hook 'hide-imports--post-command-hook t))))
 
-(defun hide-imports-toggle ()
-  "Toggle visibility of imports."
-  (interactive)
-  (if hide-imports--overlays
-      (hide-imports--show-imports)
-    (hide-imports--hide-imports)))
-
 (defun hide-imports--after-change (_beg _end _len)
   "Re-hide imports after buffer change with configurable delay."
   (when hide-imports-mode
@@ -629,7 +619,7 @@ Returns nil if cursor is not in any region, or the region as a cons cell (START 
 
     ;; Schedule new refresh with configurable delay
     (setq hide-imports--refresh-timer
-          (run-with-idle-timer 
+          (run-with-idle-timer
            hide-imports-refresh-delay nil
            (lambda (buffer)
              (when (buffer-live-p buffer)

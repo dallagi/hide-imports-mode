@@ -11,7 +11,6 @@
 - Automatically shows imports when your cursor is within the import region.
 - Configurable auto-hide timer that hides imports after a delay when cursor exits the region.
 - Independent timers for multiple import blocks - each region hides after its own delay.
-- Provides a toggle function to manually show/hide imports.
 
 ## Demo
 
@@ -54,13 +53,6 @@ Using `use-package` and `:vc`:
     ```emacs-lisp
     M-x hide-imports-mode
     ```
-
-### Toggling Imports
-
--   Use `M-x hide-imports-toggle` or the keybinding `C-c C-i` (if enabled) to manually show or hide imports.
--   Imports will automatically reappear when your cursor enters the hidden import region.
--   When you move the cursor out of an import region, it will remain visible for the configured delay period before automatically hiding.
--   Multiple import regions can have independent timers - you can quickly scroll through all import blocks to reveal them, and each will hide after its own delay.
 
 ### Auto-Hide Timer Behavior
 
