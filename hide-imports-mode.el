@@ -67,6 +67,12 @@ Set to 0 to disable auto-hide functionality."
   :type 'number
   :group 'hide-imports)
 
+(defcustom hide-imports-refresh-delay 0.5
+  "Delay in seconds before refreshing import regions after buffer changes.
+This prevents constant recalculation while typing. Set to 0 for immediate refresh."
+  :type 'number
+  :group 'hide-imports)
+
 (defvar hide-imports--overlays nil
   "List of overlays created by hide-imports-mode.")
 
@@ -85,6 +91,9 @@ Each element is a cons cell (START . END).")
 
 (defvar-local hide-imports--auto-hide-timers nil
   "Alist of (REGION . TIMER) for auto-hiding imports when cursor exits region.")
+
+(defvar-local hide-imports--refresh-timer nil
+  "Timer for delayed refresh of import regions after buffer changes.")
 
 (defvar hide-imports--language-configs
   '((python . ((modes . (python-ts-mode python-mode))
@@ -604,6 +613,10 @@ Returns nil if cursor is not in any region, or the region as a cons cell (START 
         (add-hook 'post-command-hook 'hide-imports--post-command-hook nil t))
     (progn
       (hide-imports--cancel-all-auto-hide-timers)
+      ;; Cancel refresh timer
+      (when hide-imports--refresh-timer
+        (cancel-timer hide-imports--refresh-timer)
+        (setq hide-imports--refresh-timer nil))
       (hide-imports--show-imports)
       (setq hide-imports--imports-regions nil)
       (setq hide-imports--cursor-in-imports nil)
@@ -626,30 +639,40 @@ Returns nil if cursor is not in any region, or the region as a cons cell (START 
     (hide-imports--hide-imports)))
 
 (defun hide-imports--after-change (_beg _end _len)
-  "Re-hide imports after buffer change."
+  "Re-hide imports after buffer change with configurable delay."
   (when hide-imports-mode
-    (run-with-idle-timer 0.1 nil
-                         (lambda ()
-                           (when (buffer-live-p (current-buffer))
-                             (with-current-buffer (current-buffer)
-                               ;; Cancel any pending timers since regions are changing
-                               (hide-imports--cancel-all-auto-hide-timers)
-                               ;; Clean up window states for this buffer, as regions will be recalculated
-                               (setq hide-imports--window-states
-                                     (seq-filter (lambda (entry)
-                                                   (and (window-live-p (car entry))
-                                                        (not (eq (window-buffer (car entry)) (current-buffer)))))
-                                                 hide-imports--window-states))
-                               ;; Now, perform the refresh
-                               (setq hide-imports--imports-regions nil)
-                               (setq hide-imports--cursor-in-imports nil)
-                               (hide-imports--show-imports)
-                               (hide-imports--hide-imports)
-                               ;; Re-initialize window state after refresh
-                               (dolist (window (get-buffer-window-list (current-buffer) nil t))
-                                 (with-selected-window window
-                                   (hide-imports--set-window-state window
-                                                                 (hide-imports--get-cursor-region window))))))))))
+    ;; Cancel any existing refresh timer
+    (when hide-imports--refresh-timer
+      (cancel-timer hide-imports--refresh-timer)
+      (setq hide-imports--refresh-timer nil))
+    
+    ;; Schedule new refresh with configurable delay
+    (setq hide-imports--refresh-timer
+          (run-with-idle-timer 
+           hide-imports-refresh-delay nil
+           (lambda (buffer)
+             (when (buffer-live-p buffer)
+               (with-current-buffer buffer
+                 (setq hide-imports--refresh-timer nil)
+                 ;; Cancel any pending timers since regions are changing
+                 (hide-imports--cancel-all-auto-hide-timers)
+                 ;; Clean up window states for this buffer, as regions will be recalculated
+                 (setq hide-imports--window-states
+                       (seq-filter (lambda (entry)
+                                     (and (window-live-p (car entry))
+                                          (not (eq (window-buffer (car entry)) buffer))))
+                                   hide-imports--window-states))
+                 ;; Now, perform the refresh
+                 (setq hide-imports--imports-regions nil)
+                 (setq hide-imports--cursor-in-imports nil)
+                 (hide-imports--show-imports)
+                 (hide-imports--hide-imports)
+                 ;; Re-initialize window state after refresh
+                 (dolist (window (get-buffer-window-list buffer nil t))
+                   (with-selected-window window
+                     (hide-imports--set-window-state window
+                                                   (hide-imports--get-cursor-region window)))))))
+           (current-buffer)))))
 
 (defun hide-imports--maybe-turn-on ()
   "Turn on hide-imports-mode if the current buffer's major mode is supported."
