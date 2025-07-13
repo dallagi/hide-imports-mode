@@ -255,17 +255,20 @@ Returns nil if no regions are found, or the first region as a cons cell."
 (defun hide-imports--imports-are-contiguous-p (prev-end current-start language)
   "Check if imports at PREV-END and CURRENT-START are contiguous.
 Allows for comments and whitespace between them."
-  (save-excursion
-    ;; Get text between the two imports
-    (let ((between-text (buffer-substring prev-end current-start)))
-      ;; Count newlines using string matching
-      (let ((newline-count 0)
-            (pos 0))
-        (while (string-match "\n" between-text pos)
-          (setq newline-count (1+ newline-count)
-                pos (match-end 0)))
-        ;; If there are more than 2 newlines, they're not contiguous
-        (<= newline-count 2)))))
+  (let ((text-between (buffer-substring-no-properties prev-end current-start))
+        (contiguous t))
+    (with-temp-buffer
+      (insert text-between)
+      (goto-char (point-min))
+      (while (and contiguous (not (eobp)))
+        (let ((line (buffer-substring-no-properties (line-beginning-position) (line-end-position))))
+          ;; A line is OK if it's empty/whitespace OR it's a comment.
+          (unless (or (string-match-p "^[ \t]*$" line)
+                      (string-match-p "^[ \t]*#" line)
+                      (string-match-p "^[ \t]*//" line))
+            (setq contiguous nil)))
+        (forward-line 1)))
+    contiguous))
 
 (defun hide-imports--get-all-elixir-imports-regions ()
   "Get all contiguous import regions for Elixir language at any nesting level."
@@ -634,10 +637,24 @@ Returns nil if cursor is not in any region, or the region as a cons cell (START 
                          (lambda ()
                            (when (buffer-live-p (current-buffer))
                              (with-current-buffer (current-buffer)
+                               ;; Cancel any pending timers since regions are changing
+                               (hide-imports--cancel-all-auto-hide-timers)
+                               ;; Clean up window states for this buffer, as regions will be recalculated
+                               (setq hide-imports--window-states
+                                     (seq-filter (lambda (entry)
+                                                   (and (window-live-p (car entry))
+                                                        (not (eq (window-buffer (car entry)) (current-buffer)))))
+                                                 hide-imports--window-states))
+                               ;; Now, perform the refresh
                                (setq hide-imports--imports-regions nil)
                                (setq hide-imports--cursor-in-imports nil)
                                (hide-imports--show-imports)
-                               (hide-imports--hide-imports)))))))
+                               (hide-imports--hide-imports)
+                               ;; Re-initialize window state after refresh
+                               (dolist (window (get-buffer-window-list (current-buffer) nil t))
+                                 (with-selected-window window
+                                   (hide-imports--set-window-state window
+                                                                 (hide-imports--get-cursor-region window))))))))))
 
 (defun hide-imports--maybe-turn-on ()
   "Turn on hide-imports-mode if the current buffer's major mode is supported."
