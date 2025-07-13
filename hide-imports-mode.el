@@ -144,38 +144,27 @@ Each element is a cons cell (START . END).")
 
 (defun hide-imports--get-imports-regions ()
   "Get all regions containing imports using treesit.
-Returns a list of regions (cons cells) when hide-imports-hide-all-blocks is non-nil,
-or a list with a single region (for backward compatibility) when nil."
+Returns a list of regions (cons cells). When hide-imports-hide-all-blocks is nil,
+only the first region is returned for backward compatibility."
   (when (hide-imports--supported-mode-p)
     (when-let ((config (hide-imports--get-language-config)))
       (let ((language (alist-get 'language (cdr config)))
             (import-types (alist-get 'import-types (cdr config))))
-        (let ((regions (if hide-imports-hide-all-blocks
-                           (if (eq language 'elixir)
+        (let ((all-regions (if (eq language 'elixir)
                                (hide-imports--get-all-elixir-imports-regions)
-                             (hide-imports--get-all-standard-imports-regions language import-types))
-                         ;; Single region mode (backward compatibility)
-                         (let ((region (if (eq language 'elixir)
-                                           (hide-imports--get-elixir-imports-region)
-                                         (hide-imports--get-standard-imports-region language import-types))))
-                           (when region (list region))))))
+                             (hide-imports--get-all-standard-imports-regions language import-types))))
           ;; Filter regions that meet minimum rows requirement
-          (seq-filter #'hide-imports--region-meets-minimum-rows-p regions))))))
+          (let ((filtered-regions (seq-filter #'hide-imports--region-meets-minimum-rows-p all-regions)))
+            ;; Return all regions or just the first one based on configuration
+            (if hide-imports-hide-all-blocks
+                filtered-regions
+              ;; Return only the first region for backward compatibility
+              (when filtered-regions (list (car filtered-regions))))))))))
 
 (defun hide-imports--get-imports-region ()
   "Get the first imports region for backward compatibility.
 Returns nil if no regions are found, or the first region as a cons cell."
   (car (hide-imports--get-imports-regions)))
-
-(defun hide-imports--get-standard-imports-region (language import-types)
-  "Get first imports region for Python and Rust languages at any nesting level."
-  (let ((regions (hide-imports--get-all-standard-imports-regions language import-types)))
-    (car regions)))
-
-(defun hide-imports--get-elixir-imports-region ()
-  "Get first imports region for Elixir language at any nesting level."
-  (let ((regions (hide-imports--get-all-elixir-imports-regions)))
-    (car regions)))
 
 (defun hide-imports--is-elixir-defmodule-p (node)
   "Check if NODE is an Elixir defmodule call."
