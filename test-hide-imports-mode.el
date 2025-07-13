@@ -128,9 +128,7 @@
             (should overlay)
             (should (overlay-get overlay 'display))
             (should (overlay-get overlay 'hide-imports))
-            (should (string= (overlay-get overlay 'display) 
-                           (propertize hide-imports-replacement-text 
-                                     'face 'font-lock-comment-face)))
+            (should (string-match-p "\\[.*hidden import" (overlay-get overlay 'display)))
             (should (member overlay hide-imports--overlays))))))))
 
 (ert-deftest hide-imports-overlay-removal ()
@@ -245,11 +243,11 @@
 
 (ert-deftest hide-imports-customization ()
   "Test customization variables."
-  (should (stringp hide-imports-replacement-text))
-  (let ((original-text hide-imports-replacement-text))
-    (setq hide-imports-replacement-text "Hidden imports...")
-    (should (string= hide-imports-replacement-text "Hidden imports..."))
-    (setq hide-imports-replacement-text original-text)))
+  (should (functionp hide-imports-overlay-text-function))
+  (let ((original-func hide-imports-overlay-text-function))
+    (setq hide-imports-overlay-text-function (lambda (start end) "Custom text"))
+    (should (string= (funcall hide-imports-overlay-text-function 1 10) "Custom text"))
+    (setq hide-imports-overlay-text-function original-func)))
 
 ;;; Cleanup
 

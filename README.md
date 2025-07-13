@@ -80,9 +80,19 @@ The auto-hide timer provides a more natural editing experience by giving you tim
 
 ## Configuration
 
--   `hide-imports-replacement-text`: Customize the text displayed when imports are hidden (default: "Imports...").
+-   `hide-imports-overlay-text-function`: Function to generate overlay text for hidden imports (default: `hide-imports--default-overlay-text`). The function receives START and END positions and should return a string. The default implementation shows "[N hidden import lines]".
     ```emacs-lisp
-    (setq hide-imports-replacement-text "...")
+    ;; Use the default function that shows line count
+    (setq hide-imports-overlay-text-function 'hide-imports--default-overlay-text)
+
+    ;; Use custom function
+    (setq hide-imports-overlay-text-function
+          (lambda (start end)
+            (format "<%d imports>" (count-lines start end))))
+
+    ;; Use static text
+    (setq hide-imports-overlay-text-function 
+          (lambda (start end) "Imports..."))
     ```
 -   `hide-imports-minimum-rows`: Minimum number of rows required to hide imports (default: 3). If the import region contains fewer rows than this value, imports will remain visible.
     ```emacs-lisp

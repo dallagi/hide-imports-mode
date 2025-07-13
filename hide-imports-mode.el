@@ -38,9 +38,11 @@
   :group 'convenience
   :prefix "hide-imports-")
 
-(defcustom hide-imports-replacement-text "Imports..."
-  "Text to display when imports are hidden."
-  :type 'string
+(defcustom hide-imports-overlay-text-function 'hide-imports--default-overlay-text
+  "Function to generate overlay text for hidden imports.
+The function should accept two arguments: START and END positions of the hidden region.
+It should return a string to display in place of the hidden imports."
+  :type 'function
   :group 'hide-imports)
 
 (defcustom hide-imports-global-modes
@@ -172,6 +174,15 @@ only the first region is returned for backward compatibility."
   "Get the first imports region for backward compatibility.
 Returns nil if no regions are found, or the first region as a cons cell."
   (car (hide-imports--get-imports-regions)))
+
+(defun hide-imports--default-overlay-text (start end)
+  "Default function to generate overlay text for hidden imports.
+START and END are the positions of the hidden region.
+Returns a string like '[123 hidden import lines]'."
+  (let ((line-count (count-lines start end)))
+    (format "[%d hidden import line%s]" 
+            line-count 
+            (if (= line-count 1) "" "s"))))
 
 (defun hide-imports--collect-import-nodes (node language import-types)
   "Recursively collect all import nodes from NODE and its descendants."
@@ -314,9 +325,10 @@ import blocks while the user is editing (syntax may be temporarily broken)."
 (defun hide-imports--create-overlay (start end &optional window)
   "Create an overlay to hide imports from START to END, visible only in WINDOW.
 If WINDOW is nil, the overlay is visible in all windows."
-  (let ((overlay (make-overlay start end)))
+  (let ((overlay (make-overlay start end))
+        (overlay-text (funcall hide-imports-overlay-text-function start end)))
     (overlay-put overlay 'display
-                 (propertize hide-imports-replacement-text
+                 (propertize overlay-text
                              'face 'font-lock-comment-face))
     (overlay-put overlay 'hide-imports t)
     (when window
