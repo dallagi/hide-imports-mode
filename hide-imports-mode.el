@@ -121,8 +121,9 @@ Each element is a cons cell (START . END).")
                    (language . typescript)
                    (import-types . ("import_statement")))))
   "Configuration for different languages.
-For simple languages, use 'import-types' with a list of strings.
-For complex languages, use 'import-predicate' function.")
+Use 'import-types' to define types that identify import statements.
+If the type alone is not sufficient to identify imports, use 'import-predicate'
+to define a function that does that.")
 
 (defun hide-imports--get-language-config ()
   "Get the language configuration for the current buffer."
