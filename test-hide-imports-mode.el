@@ -785,7 +785,7 @@ print('hello')"
       (should (eq (car config) 'elixir))
       (should (equal (alist-get 'language (cdr config)) 'elixir))
       (should (alist-get 'import-predicate (cdr config)))
-      (should (alist-get 'collect-imports (cdr config))))))
+)))
 
 ;;; Multi-block Tests
 
