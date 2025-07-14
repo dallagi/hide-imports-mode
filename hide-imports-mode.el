@@ -95,6 +95,18 @@ Each element is a cons cell (START . END).")
 (defvar-local hide-imports--refresh-timer nil
   "Timer for delayed refresh of import regions after buffer changes.")
 
+(defun hide-imports--elixir-import-predicate (node)
+  "Check if NODE is an Elixir import node (alias, import, require, use)."
+  (when (string= (treesit-node-type node) "call")
+    (let ((first-child (treesit-node-child node 0)))
+      (when (and first-child (string= (treesit-node-type first-child) "identifier"))
+        (let ((func-name (treesit-node-text first-child)))
+          (member func-name '("alias" "import" "require" "use")))))))
+
+(defun hide-imports--elixir-collect-imports (root)
+  "Collect all Elixir import nodes from ROOT using language-specific logic."
+  (hide-imports--get-all-elixir-imports-regions root))
+
 (defvar hide-imports--language-configs
   '((python . ((modes . (python-ts-mode python-mode))
                (language . python)
@@ -104,14 +116,17 @@ Each element is a cons cell (START . END).")
              (import-types . ("use_declaration" "extern_crate_declaration"))))
     (elixir . ((modes . (elixir-ts-mode elixir-mode))
                (language . elixir)
-               (import-types . ("call"))))
+               (import-predicate . hide-imports--elixir-import-predicate)
+               (collect-imports . hide-imports--elixir-collect-imports)))
     (javascript . ((modes . (js-mode js-ts-mode javascript-mode))
                    (language . javascript)
                    (import-types . ("import_statement"))))
     (typescript . ((modes . (typescript-mode typescript-ts-mode tsx-ts-mode))
                    (language . typescript)
                    (import-types . ("import_statement")))))
-  "Configuration for different languages.")
+  "Configuration for different languages.
+For simple languages, use 'import-types' with a list of strings.
+For complex languages, use 'import-predicate' function and 'collect-imports' function.")
 
 (defun hide-imports--get-language-config ()
   "Get the language configuration for the current buffer."
@@ -127,20 +142,15 @@ Each element is a cons cell (START . END).")
       (and (treesit-available-p)
            (treesit-language-available-p language)))))
 
-(defun hide-imports--is-import-node-p (node language import-types)
-  "Check if NODE is an import node for LANGUAGE using IMPORT-TYPES."
-  (let ((node-type (treesit-node-type node)))
-    (if (eq language 'elixir)
-        (hide-imports--is-elixir-import-node-p node)
-      (member node-type import-types))))
+(defun hide-imports--is-import-node-p (node config)
+  "Check if NODE is an import node using CONFIG."
+  (let ((import-types (alist-get 'import-types config))
+        (import-predicate (alist-get 'import-predicate config)))
+    (cond
+     (import-predicate (funcall import-predicate node))
+     (import-types (member (treesit-node-type node) import-types))
+     (t nil))))
 
-(defun hide-imports--is-elixir-import-node-p (node)
-  "Check if NODE is an Elixir import node (alias, import, require, use)."
-  (when (string= (treesit-node-type node) "call")
-    (let ((first-child (treesit-node-child node 0)))
-      (when (and first-child (string= (treesit-node-type first-child) "identifier"))
-        (let ((func-name (treesit-node-text first-child)))
-          (member func-name '("alias" "import" "require" "use")))))))
 
 (defun hide-imports--count-rows (start end)
   "Count the number of rows between START and END positions."
@@ -162,12 +172,12 @@ Each element is a cons cell (START . END).")
 Returns a list of regions (cons cells). When hide-imports-hide-all-blocks is nil,
 only the first region is returned for backward compatibility."
   (when (hide-imports--supported-mode-p)
-    (when-let ((config (hide-imports--get-language-config)))
-      (let ((language (alist-get 'language (cdr config)))
-            (import-types (alist-get 'import-types (cdr config))))
-        (let ((all-regions (if (eq language 'elixir)
-                               (hide-imports--get-all-elixir-imports-regions)
-                             (hide-imports--get-all-standard-imports-regions language import-types))))
+    (when-let ((lang-config (hide-imports--get-language-config)))
+      (let ((config (cdr lang-config))
+            (collect-imports-fn (alist-get 'collect-imports (cdr lang-config))))
+        (let ((all-regions (if collect-imports-fn
+                               (funcall collect-imports-fn (treesit-buffer-root-node (alist-get 'language config)))
+                             (hide-imports--get-all-standard-imports-regions config))))
           ;; Filter regions that meet minimum rows requirement
           (let ((filtered-regions (seq-filter #'hide-imports--region-meets-minimum-rows-p all-regions)))
             ;; Return all regions or just the first one based on configuration
@@ -190,26 +200,27 @@ Returns a string like '[123 hidden import lines]'."
             line-count
             (if (= line-count 1) "" "s"))))
 
-(defun hide-imports--collect-import-nodes (node language import-types)
-  "Recursively collect all import nodes from NODE and its descendants."
+(defun hide-imports--collect-import-nodes (node config)
+  "Recursively collect all import nodes from NODE and its descendants using CONFIG."
   (let ((import-nodes nil))
     (when node
       ;; Check if current node is an import
-      (when (hide-imports--is-import-node-p node language import-types)
+      (when (hide-imports--is-import-node-p node config)
         (push node import-nodes))
       ;; Recursively check all children
       (dolist (child (treesit-node-children node))
         (setq import-nodes (append import-nodes
-                                   (hide-imports--collect-import-nodes child language import-types)))))
+                                   (hide-imports--collect-import-nodes child config)))))
     import-nodes))
 
-(defun hide-imports--get-all-standard-imports-regions (language import-types)
-  "Get all contiguous import regions for Python and Rust languages at any nesting level."
-  (let ((root (treesit-buffer-root-node language))
+(defun hide-imports--get-all-standard-imports-regions (config)
+  "Get all contiguous import regions using standard collection logic."
+  (let ((language (alist-get 'language config))
+        (root (treesit-buffer-root-node (alist-get 'language config)))
         (regions nil))
     (when root
       ;; Collect all import nodes from the entire tree
-      (let ((import-nodes (hide-imports--collect-import-nodes root language import-types)))
+      (let ((import-nodes (hide-imports--collect-import-nodes root config)))
         ;; Sort import nodes by position
         (setq import-nodes (sort import-nodes (lambda (a b)
                                                 (< (treesit-node-start a)
@@ -282,13 +293,13 @@ import blocks while the user is editing (syntax may be temporarily broken)."
         (forward-line 1)))
     contiguous))
 
-(defun hide-imports--get-all-elixir-imports-regions ()
+(defun hide-imports--get-all-elixir-imports-regions (root)
   "Get all contiguous import regions for Elixir language at any nesting level."
-  (let ((root (treesit-buffer-root-node 'elixir))
-        (regions nil))
+  (let ((regions nil))
     (when root
       ;; Collect all import nodes from the entire tree
-      (let ((import-nodes (hide-imports--collect-elixir-import-nodes root)))
+      (let* ((elixir-config '((import-predicate . hide-imports--elixir-import-predicate)))
+             (import-nodes (hide-imports--collect-import-nodes root elixir-config)))
         ;; Sort import nodes by position
         (setq import-nodes (sort import-nodes (lambda (a b)
                                                 (< (treesit-node-start a)
@@ -315,18 +326,6 @@ import blocks while the user is editing (syntax may be temporarily broken)."
             (push (cons current-start current-end) regions)))))
     (nreverse regions)))
 
-(defun hide-imports--collect-elixir-import-nodes (node)
-  "Recursively collect all Elixir import nodes from NODE and its descendants."
-  (let ((import-nodes nil))
-    (when node
-      ;; Check if current node is an import
-      (when (hide-imports--is-elixir-import-node-p node)
-        (push node import-nodes))
-      ;; Recursively check all children
-      (dolist (child (treesit-node-children node))
-        (setq import-nodes (append import-nodes
-                                   (hide-imports--collect-elixir-import-nodes child)))))
-    import-nodes))
 
 (defun hide-imports--create-overlay (start end &optional window)
   "Create an overlay to hide imports from START to END, visible only in WINDOW.
