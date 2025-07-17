@@ -107,19 +107,24 @@ Each element is a cons cell (START . END).")
 (defvar hide-imports--language-configs
   '((python . ((modes . (python-ts-mode python-mode))
                (language . python)
-               (import-types . ("import_statement" "import_from_statement"))))
+               (import-types . ("import_statement" "import_from_statement"))
+               (comment-types . ("comment"))))
     (rust . ((modes . (rust-ts-mode rust-mode rustic-mode))
              (language . rust)
-             (import-types . ("use_declaration" "extern_crate_declaration"))))
+             (import-types . ("use_declaration" "extern_crate_declaration"))
+             (comment-types . ("line_comment" "block_comment"))))
     (elixir . ((modes . (elixir-ts-mode elixir-mode))
                (language . elixir)
-               (import-predicate . hide-imports--elixir-import-predicate)))
+               (import-predicate . hide-imports--elixir-import-predicate)
+               (comment-types . ("comment"))))
     (javascript . ((modes . (js-mode js-ts-mode javascript-mode))
                    (language . javascript)
-                   (import-types . ("import_statement"))))
+                   (import-types . ("import_statement"))
+                   (comment-types . ("comment"))))
     (typescript . ((modes . (typescript-mode typescript-ts-mode tsx-ts-mode))
                    (language . typescript)
-                   (import-types . ("import_statement")))))
+                   (import-types . ("import_statement"))
+                   (comment-types . ("comment")))))
   "Configuration for different languages.
 Use 'import-types' to define types that identify import statements.
 If the type alone is not sufficient to identify imports, use 'import-predicate'
@@ -133,11 +138,13 @@ to define a function that does that.")
             hide-imports--language-configs))
 
 (defun hide-imports--supported-mode-p ()
-  "Check if current buffer is supported and has tree-sitter support."
+  "Check if current buffer is supported with tree-sitter or fallback support."
   (when-let ((config (hide-imports--get-language-config)))
     (let ((language (alist-get 'language (cdr config))))
-      (and (treesit-available-p)
-           (treesit-language-available-p language)))))
+      (or (and (treesit-available-p)
+               (treesit-language-available-p language))
+          ;; Fallback: supported if we have a language config
+          t))))
 
 (defun hide-imports--is-import-node-p (node config)
   "Check if NODE is an import node using CONFIG."
@@ -147,6 +154,38 @@ to define a function that does that.")
      (import-predicate (funcall import-predicate node))
      (import-types (member (treesit-node-type node) import-types))
      (t nil))))
+
+(defun hide-imports--is-comment-node-p (node config)
+  "Check if NODE is a comment node using CONFIG."
+  (let ((comment-types (alist-get 'comment-types config)))
+    (and comment-types
+         (member (treesit-node-type node) comment-types))))
+
+(defun hide-imports--line-has-comment-p (line-num config)
+  "Check if line LINE-NUM has a comment using tree-sitter with CONFIG.
+Falls back to regex patterns if tree-sitter is unavailable."
+  (save-excursion
+    (goto-char (point-min))
+    (forward-line (1- line-num))
+    (let ((line (buffer-substring-no-properties (line-beginning-position) (line-end-position))))
+      (or 
+       ;; Try tree-sitter first
+       (when (and (treesit-available-p) config)
+         (let ((language (alist-get 'language config)))
+           (when (treesit-language-available-p language)
+             (condition-case nil
+                 (let ((root (treesit-buffer-root-node language)))
+                   (when root
+                     (let ((line-start (line-beginning-position))
+                           (line-end (line-end-position)))
+                       (treesit-query-capture
+                        root
+                        `((comment) @comment)
+                        line-start line-end))))
+               (error nil)))))
+       ;; Fallback to regex patterns
+       (string-match-p "^[ \t]*#" line)
+       (string-match-p "^[ \t]*//" line)))))
 
 
 (defun hide-imports--count-rows (start end)
@@ -171,7 +210,11 @@ only the first region is returned for backward compatibility."
   (when (hide-imports--supported-mode-p)
     (when-let ((lang-config (hide-imports--get-language-config)))
       (let ((config (cdr lang-config)))
-        (let ((all-regions (hide-imports--get-all-imports-regions config)))
+        (let ((all-regions (if (and (treesit-available-p) 
+                                   (treesit-language-available-p (alist-get 'language config)))
+                               (hide-imports--get-all-imports-regions config)
+                             ;; Fallback: return nil if no tree-sitter support
+                             nil)))
           ;; Filter regions that meet minimum rows requirement
           (let ((filtered-regions (seq-filter #'hide-imports--region-meets-minimum-rows-p all-regions)))
             ;; Return all regions or just the first one based on configuration
@@ -247,7 +290,8 @@ Returns a string like '[123 hidden import lines]'."
 (defun hide-imports--expand-region-for-comments (region)
   "Expand REGION to include leading comments and whitespace."
   (let ((start (car region))
-        (end (cdr region)))
+        (end (cdr region))
+        (config (hide-imports--get-language-config)))
     (save-excursion
       ;; Look backwards from start to include comments
       (goto-char start)
@@ -257,10 +301,15 @@ Returns a string like '[123 hidden import lines]'."
         (while (and (> (point) (point-min))
                     (progn
                       (beginning-of-line 0) ; Go to previous line
-                      (looking-at "[ \t]*\\(#\\|//\\|$\\)"))) ; Comment or empty line
+                      (let ((line-num (line-number-at-pos)))
+                        (or (looking-at "[ \t]*$") ; Empty line
+                            (and config (hide-imports--line-has-comment-p line-num (cdr config)))
+                            (looking-at "[ \t]*\\(#\\|//\\)"))))) ; Regex fallback
           ;; Only include comments that appear to be related to imports
-          (when (looking-at "[ \t]*\\(#\\|//\\)")
-            (setq new-start (point))))
+          (let ((line-num (line-number-at-pos)))
+            (when (or (and config (hide-imports--line-has-comment-p line-num (cdr config)))
+                      (looking-at "[ \t]*\\(#\\|//\\)"))
+              (setq new-start (point)))))
         (cons new-start end)))))
 
 (defun hide-imports--imports-are-contiguous-p (prev-end current-start language)
@@ -280,6 +329,9 @@ import blocks while the user is editing (syntax may be temporarily broken)."
               (current-line-num (+ start-line-num (1- (line-number-at-pos)))))
           ;; A line is OK if it's empty/whitespace OR it's a comment OR it contains the cursor.
           (unless (or (string-match-p "^[ \t]*$" line)
+                      (and (hide-imports--get-language-config) 
+                           (hide-imports--line-has-comment-p current-line-num 
+                                                            (cdr (hide-imports--get-language-config))))
                       (string-match-p "^[ \t]*#" line)
                       (string-match-p "^[ \t]*//" line)
                       (= current-line-num cursor-line-num))
