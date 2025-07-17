@@ -150,7 +150,7 @@ to define a function that does that.")
     (let ((language (alist-get 'language (cdr config))))
       (cond
        ((not (treesit-available-p))
-        (user-error "hide-imports-mode requires Tree-sitter support (Emacs 29+)"))
+        (user-error "hide-imports-mode requires Tree-sitter support (Emacs 30.1+)"))
        ((not (treesit-language-available-p language))
         (user-error "hide-imports-mode requires Tree-sitter grammar for %s. Install it with: M-x treesit-install-language-grammar RET %s RET" language language))
        (t t)))))
