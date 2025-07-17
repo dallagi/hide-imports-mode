@@ -10,6 +10,7 @@
 ## Table of Contents
 
 - [Features](#features)
+- [Requirements](#requirements)
 - [Installation](#installation)
   - [Manual Installation](#manual-installation)
   - [Using a Package Manager](#using-a-package-manager)
@@ -30,6 +31,13 @@
 - Configurable auto-hide timer that hides imports after a delay when cursor exits the region.
 
 
+
+## Requirements
+
+- **Emacs 30.1 or later**
+- **Tree-sitter grammars** - Required for supported languages (python, rust, elixir, javascript, typescript)
+
+You can install Tree-sitter grammars using `M-x treesit-install-language-grammar` for each language you want to use.
 
 ## Installation
 
