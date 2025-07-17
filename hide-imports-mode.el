@@ -138,13 +138,22 @@ to define a function that does that.")
             hide-imports--language-configs))
 
 (defun hide-imports--supported-mode-p ()
-  "Check if current buffer is supported with tree-sitter or fallback support."
+  "Check if current buffer is supported and has tree-sitter support."
   (when-let ((config (hide-imports--get-language-config)))
     (let ((language (alist-get 'language (cdr config))))
-      (or (and (treesit-available-p)
-               (treesit-language-available-p language))
-          ;; Fallback: supported if we have a language config
-          t))))
+      (and (treesit-available-p)
+           (treesit-language-available-p language)))))
+
+(defun hide-imports--check-treesitter-support ()
+  "Check Tree-sitter support and show error if not available."
+  (when-let ((config (hide-imports--get-language-config)))
+    (let ((language (alist-get 'language (cdr config))))
+      (cond
+       ((not (treesit-available-p))
+        (user-error "hide-imports-mode requires Tree-sitter support (Emacs 29+)"))
+       ((not (treesit-language-available-p language))
+        (user-error "hide-imports-mode requires Tree-sitter grammar for %s. Install it with: M-x treesit-install-language-grammar RET %s RET" language language))
+       (t t)))))
 
 (defun hide-imports--is-import-node-p (node config)
   "Check if NODE is an import node using CONFIG."
@@ -162,30 +171,27 @@ to define a function that does that.")
          (member (treesit-node-type node) comment-types))))
 
 (defun hide-imports--line-has-comment-p (line-num config)
-  "Check if line LINE-NUM has a comment using tree-sitter with CONFIG.
-Falls back to regex patterns if tree-sitter is unavailable."
-  (save-excursion
-    (goto-char (point-min))
-    (forward-line (1- line-num))
-    (let ((line (buffer-substring-no-properties (line-beginning-position) (line-end-position))))
-      (or 
-       ;; Try tree-sitter first
-       (when (and (treesit-available-p) config)
-         (let ((language (alist-get 'language config)))
-           (when (treesit-language-available-p language)
-             (condition-case nil
-                 (let ((root (treesit-buffer-root-node language)))
-                   (when root
-                     (let ((line-start (line-beginning-position))
-                           (line-end (line-end-position)))
-                       (treesit-query-capture
-                        root
-                        `((comment) @comment)
-                        line-start line-end))))
-               (error nil)))))
-       ;; Fallback to regex patterns
-       (string-match-p "^[ \t]*#" line)
-       (string-match-p "^[ \t]*//" line)))))
+  "Check if line LINE-NUM has a comment using tree-sitter with CONFIG."
+  (when config
+    (let ((language (alist-get 'language config))
+          (comment-types (alist-get 'comment-types config)))
+      (when (and (treesit-language-available-p language) comment-types)
+        (condition-case nil
+            (save-excursion
+              (goto-char (point-min))
+              (forward-line (1- line-num))
+              (let ((line-start (line-beginning-position))
+                    (line-end (line-end-position)))
+                ;; Check each character position in the line for comment nodes
+                (catch 'found-comment
+                  (let ((pos line-start))
+                    (while (< pos line-end)
+                      (when-let ((node (treesit-node-at pos language)))
+                        (when (member (treesit-node-type node) comment-types)
+                          (throw 'found-comment t)))
+                      (setq pos (1+ pos))))
+                  nil)))
+          (error nil))))))
 
 
 (defun hide-imports--count-rows (start end)
@@ -210,11 +216,7 @@ only the first region is returned for backward compatibility."
   (when (hide-imports--supported-mode-p)
     (when-let ((lang-config (hide-imports--get-language-config)))
       (let ((config (cdr lang-config)))
-        (let ((all-regions (if (and (treesit-available-p) 
-                                   (treesit-language-available-p (alist-get 'language config)))
-                               (hide-imports--get-all-imports-regions config)
-                             ;; Fallback: return nil if no tree-sitter support
-                             nil)))
+        (let ((all-regions (hide-imports--get-all-imports-regions config)))
           ;; Filter regions that meet minimum rows requirement
           (let ((filtered-regions (seq-filter #'hide-imports--region-meets-minimum-rows-p all-regions)))
             ;; Return all regions or just the first one based on configuration
@@ -303,12 +305,10 @@ Returns a string like '[123 hidden import lines]'."
                       (beginning-of-line 0) ; Go to previous line
                       (let ((line-num (line-number-at-pos)))
                         (or (looking-at "[ \t]*$") ; Empty line
-                            (and config (hide-imports--line-has-comment-p line-num (cdr config)))
-                            (looking-at "[ \t]*\\(#\\|//\\)"))))) ; Regex fallback
+                            (and config (hide-imports--line-has-comment-p line-num (cdr config)))))))
           ;; Only include comments that appear to be related to imports
           (let ((line-num (line-number-at-pos)))
-            (when (or (and config (hide-imports--line-has-comment-p line-num (cdr config)))
-                      (looking-at "[ \t]*\\(#\\|//\\)"))
+            (when (and config (hide-imports--line-has-comment-p line-num (cdr config)))
               (setq new-start (point)))))
         (cons new-start end)))))
 
@@ -317,23 +317,20 @@ Returns a string like '[123 hidden import lines]'."
 Allows for comments and whitespace between them.
 Also treats the line containing the cursor as valid to avoid splitting
 import blocks while the user is editing (syntax may be temporarily broken)."
-  (let ((text-between (buffer-substring-no-properties prev-end current-start))
-        (contiguous t)
+  (let ((contiguous t)
         (cursor-line-num (line-number-at-pos (point)))
-        (start-line-num (line-number-at-pos prev-end)))
-    (with-temp-buffer
-      (insert text-between)
-      (goto-char (point-min))
-      (while (and contiguous (not (eobp)))
+        (start-line-num (line-number-at-pos prev-end))
+        (end-line-num (line-number-at-pos current-start))
+        (config (hide-imports--get-language-config)))
+    (save-excursion
+      (goto-char prev-end)
+      (forward-line 1)  ; Start from line after prev-end
+      (while (and contiguous (< (line-number-at-pos) end-line-num))
         (let ((line (buffer-substring-no-properties (line-beginning-position) (line-end-position)))
-              (current-line-num (+ start-line-num (1- (line-number-at-pos)))))
+              (current-line-num (line-number-at-pos)))
           ;; A line is OK if it's empty/whitespace OR it's a comment OR it contains the cursor.
           (unless (or (string-match-p "^[ \t]*$" line)
-                      (and (hide-imports--get-language-config) 
-                           (hide-imports--line-has-comment-p current-line-num 
-                                                            (cdr (hide-imports--get-language-config))))
-                      (string-match-p "^[ \t]*#" line)
-                      (string-match-p "^[ \t]*//" line)
+                      (and config (hide-imports--line-has-comment-p current-line-num (cdr config)))
                       (= current-line-num cursor-line-num))
             (setq contiguous nil)))
         (forward-line 1)))
@@ -598,6 +595,7 @@ Returns nil if cursor is not in any region, or the region as a cons cell (START 
   :group 'hide-imports
   (if hide-imports-mode
       (progn
+        (hide-imports--check-treesitter-support)
         (setq hide-imports--last-cursor-position (point))
         (setq hide-imports--auto-hide-timers nil)
         (hide-imports--hide-imports)
