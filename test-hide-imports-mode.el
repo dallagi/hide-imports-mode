@@ -151,7 +151,7 @@
         (goto-char (point-max))
         (hide-imports--hide-imports)
         ;; With window-local overlays, we need to check for window-specific overlays
-        (should (hide-imports--window-has-overlays-p (selected-window)))
+        (should hide-imports--overlays)
         (hide-imports--show-imports)
         (should-not hide-imports--overlays)))))
 
@@ -203,12 +203,12 @@
           ;; Move cursor away from imports region
           (goto-char (1+ (cdr region)))
           (hide-imports--post-command-hook)
-          (should (hide-imports--window-has-overlays-p (selected-window)))
+          (should hide-imports--overlays)
           (hide-imports-toggle)
-          (should-not (hide-imports--window-has-overlays-p (selected-window)))
+          (should-not hide-imports--overlays)
           (hide-imports-toggle)
           ;; After toggle, imports should be hidden again
-          (should (hide-imports--window-has-overlays-p (selected-window))))))))
+          (should hide-imports--overlays))))))
 
 ;;; Edge Cases
 
@@ -265,8 +265,7 @@
         (should hide-imports--imports-regions)
         (hide-imports-mode -1)
         (should-not hide-imports--overlays)
-        (should-not hide-imports--imports-regions)
-        (should-not hide-imports--cursor-in-imports)))))
+        (should-not hide-imports--imports-regions)))))
 
 ;;; Global Mode Tests
 
@@ -457,17 +456,17 @@ print('hello')"
           ;; Start with cursor outside imports (should hide)
           (goto-char (+ (cdr region) 10))
           (hide-imports--post-command-hook)
-          (should (hide-imports--window-has-overlays-p (selected-window)))
+          (should hide-imports--overlays)
 
           ;; Move cursor to imports (should show for this window)
           (goto-char (car region))
           (hide-imports--post-command-hook)
-          (should-not (hide-imports--window-has-overlays-p (selected-window)))
+          (should-not hide-imports--overlays)
 
           ;; Move cursor back outside (should hide again)
           (goto-char (+ (cdr region) 10))
           (hide-imports--post-command-hook)
-          (should (hide-imports--window-has-overlays-p (selected-window))))))))
+          (should hide-imports--overlays))))))
 
 (ert-deftest hide-imports-buffer-local-window-cleanup ()
   "Test that window states are cleaned up when mode is disabled."

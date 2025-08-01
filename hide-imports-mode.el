@@ -370,12 +370,6 @@ If WINDOW is nil, remove all overlays."
         (delete-overlay overlay)))
     (setq hide-imports--overlays nil)))
 
-(defun hide-imports--window-has-overlays-p (window)
-  "Check if WINDOW has any hide-imports overlays."
-  (seq-some (lambda (overlay)
-              (eq (overlay-get overlay 'window) window))
-            hide-imports--overlays))
-
 (defun hide-imports--window-has-overlay-for-region-p (window region)
   "Check if WINDOW has an overlay for the specific REGION."
   (seq-some (lambda (overlay)
@@ -614,7 +608,6 @@ Returns nil if cursor is not in any region, or the region as a cons cell (START 
         (setq hide-imports--refresh-timer nil))
       (hide-imports--show-imports)
       (setq hide-imports--imports-regions nil)
-      (setq hide-imports--cursor-in-imports nil)
       (setq hide-imports--last-cursor-position nil)
       (setq hide-imports--auto-hide-timers nil)
       ;; Clean up window states for this buffer
