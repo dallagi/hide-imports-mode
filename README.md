@@ -30,8 +30,6 @@
 - **Emacs 30.1 or later**
 - **Tree-sitter grammars** - Required for supported languages (python, rust, elixir, javascript, typescript)
 
-You can install Tree-sitter grammars using `M-x treesit-install-language-grammar` for each language you want to use.
-
 ## Installation
 
 ### Manual Installation
