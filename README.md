@@ -49,7 +49,7 @@ Using `use-package` and `:vc`:
 
 ```emacs-lisp
 (use-package hide-imports-mode
-  :vc (:fetcher github :repo "dallagi/hide-imports-mode")
+  :vc (:url "https://github.com/dallagi/hide-imports-mode" :rev "1.0")
   :config
   (hide-imports-global-mode 1))
 ```
