@@ -21,16 +21,9 @@
 
 ## Features
 
-- Hides import statements in supported major modes:
-    - Elixir
-    - JavaScript
-    - Python
-    - Rust
-    - TypeScript
+- Hides import statements in supported major modes: Elixir, JavaScript, Python, Rust, TypeScript
 - Automatically shows imports when your cursor is within the import region.
 - Configurable auto-hide timer that hides imports after a delay when cursor exits the region.
-
-
 
 ## Requirements
 
@@ -82,56 +75,30 @@ When you move the cursor away from import regions, they automatically hide after
 
 ## Configuration
 
--   `hide-imports-overlay-text-function`: Function to generate overlay text for hidden imports (default: `hide-imports--default-overlay-text`). The function receives START and END positions and should return a string. The default implementation shows "[N hidden import lines]".
-    ```emacs-lisp
-    ;; Use the default function that shows line count
-    (setq hide-imports-overlay-text-function 'hide-imports--default-overlay-text)
+```emacs-lisp
+;; Overlay text function - generates text shown when imports are hidden
+;; Default shows "[N hidden import lines]"
+(setq hide-imports-overlay-text-function 'hide-imports--default-overlay-text)
+;; You can also provide your own function:
+;; (setq hide-imports-overlay-text-function (lambda (start end) (format "<%d imports>" (count-lines start end))))
+;; Or to simply use static text:
+;; (setq hide-imports-overlay-text-function (lambda (start end) "Imports..."))
 
-    ;; Use custom function
-    (setq hide-imports-overlay-text-function
-          (lambda (start end)
-            (format "<%d imports>" (count-lines start end))))
+;; Minimum rows required to hide imports (default: 3)
+(setq hide-imports-minimum-rows 3)
 
-    ;; Use static text
-    (setq hide-imports-overlay-text-function
-          (lambda (start end) "Imports..."))
-    ```
--   `hide-imports-minimum-rows`: Minimum number of rows required to hide imports (default: 3). If the import region contains fewer rows than this value, imports will remain visible.
-    ```emacs-lisp
-    ;; Hide imports only if there are 5+ rows
-    (setq hide-imports-minimum-rows 5)
+;; Set to t to hide all import blocks throughout file, not just the first one (default: nil)
+(setq hide-imports-hide-all-blocks nil)
 
-    ;; Hide all imports, even single lines
-    (setq hide-imports-minimum-rows 1)
-    ```
--   `hide-imports-hide-all-blocks`: When non-nil, hide all contiguous import blocks instead of only the first one (default: nil). Each contiguous block of imports/comments must meet the minimum-rows threshold to be hidden.
-    ```emacs-lisp
-    ;; Hide all import blocks throughout the file
-    (setq hide-imports-hide-all-blocks t)
+;; Auto-hide delay in seconds when cursor exits region (default: 1.0)
+(setq hide-imports-auto-hide-delay 1.0)
+;; Set to 0 for immediate hiding
 
-    ;; Hide only the first import block (default behavior)
-    (setq hide-imports-hide-all-blocks nil)
-    ```
--   `hide-imports-auto-hide-delay`: Delay in seconds before automatically hiding imports when cursor exits the region (default: 1.0). Set to 0 to disable auto-hide functionality and return to immediate hiding.
-    ```emacs-lisp
-    ;; Hide imports after 2 seconds
-    (setq hide-imports-auto-hide-delay 2.0)
+;; Major modes where global mode activates hide-imports-mode
+(setq hide-imports-global-modes '(python-mode python-ts-mode rust-mode elixir-mode elixir-ts-mode
+                                  js-mode js-ts-mode typescript-mode typescript-ts-mode))
 
-    ;; Disable auto-hide timer (immediate hiding)
-    (setq hide-imports-auto-hide-delay 0)
-
-    ;; Very short delay for quick coding
-    (setq hide-imports-auto-hide-delay 0.5)
-    ```
--   `hide-imports-global-modes`: A list of major modes where `hide-imports-global-mode` should activate `hide-imports-mode`.
-    ```emacs-lisp
-    (setq hide-imports-global-modes '(python-mode python-ts-mode rust-mode))
-    ```
--   `hide-imports-refresh-delay`: Delay in seconds before refreshing import regions after buffer changes (default: 0.5). This prevents constant recalculation while typing. Set to 0 for immediate refresh.
-    ```emacs-lisp
-    ;; Refresh after 1 second of inactivity
-    (setq hide-imports-refresh-delay 1.0)
-
-    ;; Immediate refresh (may impact performance)
-    (setq hide-imports-refresh-delay 0)
-    ```
+;; Refresh delay after buffer changes to prevent constant recalculation while typing (default: 0.5)
+;; Set to 0 for immediate refresh
+(setq hide-imports-refresh-delay 0.5)
+```
