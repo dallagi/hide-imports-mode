@@ -47,7 +47,7 @@ It should return a string to display in place of the hidden imports."
 
 (defcustom hide-imports-global-modes
   '(python-mode python-ts-mode rust-mode rust-ts-mode rustic-mode elixir-mode elixir-ts-mode js-mode js-ts-mode javascript-mode typescript-mode typescript-ts-mode tsx-ts-mode)
-  "List of major modes where hide-imports-global-mode should be enabled."
+  "List of major modes where `hide-imports-global-mode' should be enabled."
   :type '(repeat (symbol :tag "Major mode"))
   :group 'hide-imports)
 
@@ -655,7 +655,7 @@ Returns nil if cursor is not in any region, or the region as a cons cell (START 
            (current-buffer)))))
 
 (defun hide-imports--maybe-turn-on ()
-  "Turn on hide-imports-mode if the current buffer's major mode is supported."
+  "Turn on `hide-imports-mode' if the current buffer's major mode is supported."
   (when (and (not hide-imports-mode)
              (hide-imports--supported-mode-p)
              (memq major-mode hide-imports-global-modes))
